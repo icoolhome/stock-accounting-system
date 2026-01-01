@@ -1,0 +1,84 @@
+import { Link, useLocation } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+
+interface LayoutProps {
+  children: React.ReactNode;
+}
+
+const Layout: React.FC<LayoutProps> = ({ children }) => {
+  const { user, logout } = useAuth();
+  const location = useLocation();
+
+  const menuItems = [
+    { path: '/', label: '儀表版' },
+    { path: '/transactions', label: '交易記錄' },
+    { path: '/settlements', label: '交割管理' },
+    { path: '/bank-accounts', label: '銀行帳戶' },
+    { path: '/holdings', label: '庫存管理' },
+    { path: '/portfolio', label: '投資組合' },
+    { path: '/dividends', label: '歷史收益' },
+    { path: '/settings', label: '系統設定' },
+    ...(user?.role === 'admin' ? [{ path: '/admin', label: '後台管理' }] : []),
+  ];
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex">
+      {/* 左側直欄導覽列 */}
+      <aside className="w-40 bg-white border-r shadow-sm flex flex-col">
+        <nav className="flex-1 overflow-y-auto py-4">
+          <ul className="space-y-1" style={{ marginTop: '5cm' }}>
+            {menuItems.map((item) => {
+              const active = location.pathname === item.path;
+              return (
+                <li key={item.path}>
+                  <Link
+                    to={item.path}
+                    className={`flex items-center pl-16 pr-3 py-2 text-sm font-medium rounded-r-full whitespace-nowrap ${
+                      active
+                        ? 'bg-blue-50 text-blue-700 border-l-4 border-blue-500'
+                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                    }`}
+                  >
+                    {item.label}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+      </aside>
+
+      {/* 右側主內容區 */}
+      <main className="flex-1 flex flex-col min-w-0">
+        {/* 頂部欄 */}
+        <header className="bg-white border-b shadow-sm h-16 px-4 sm:px-6 lg:px-8 flex items-center justify-between w-full min-w-0">
+          <h1 className="text-lg font-bold text-gray-900 whitespace-nowrap">股票記帳系統</h1>
+          <div className="flex items-center gap-4 flex-shrink-0">
+            <div className="flex flex-col items-end whitespace-nowrap">
+              <span className="text-xs text-gray-500">已登入帳號</span>
+              <span className="text-sm text-gray-800 font-medium truncate max-w-[200px]">
+                {user?.email}
+              </span>
+            </div>
+            <button
+              onClick={logout}
+              className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0"
+            >
+              登出
+            </button>
+          </div>
+        </header>
+        
+        {/* 主內容 */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden">
+          <div className="w-full py-6 px-4 sm:px-6 lg:px-8">
+            {children}
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+};
+
+export default Layout;
+
