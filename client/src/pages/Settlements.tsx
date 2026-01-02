@@ -101,6 +101,24 @@ const Settlements = () => {
     }
   }, [formData.transaction_ids, transactions]);
 
+  // 根據交割日期自動判斷狀態
+  useEffect(() => {
+    if (formData.settlement_date && !editingSettlement) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const settlementDate = new Date(formData.settlement_date);
+      settlementDate.setHours(0, 0, 0, 0);
+      
+      // 如果交割日期是今天或過去，狀態設為「已交割」；否則設為「未交割」
+      const autoStatus = settlementDate <= today ? '已交割' : '未交割';
+      
+      setFormData(prev => ({
+        ...prev,
+        status: autoStatus
+      }));
+    }
+  }, [formData.settlement_date, editingSettlement]);
+
   const fetchBankAccounts = async () => {
     try {
       const response = await axios.get('/api/bank-accounts');

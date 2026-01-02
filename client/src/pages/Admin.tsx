@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
+import * as XLSX from 'xlsx';
+import { format } from 'date-fns';
 
 interface User {
   id: number;
@@ -267,6 +269,80 @@ const Admin = () => {
     } catch (err: any) {
       setError(err.response?.data?.message || '刪除日誌失敗');
       setTimeout(() => setError(''), 3000);
+    }
+  };
+
+  const handleExportLogs = async () => {
+    try {
+      setLoading(true);
+      // 獲取所有日誌
+      const response = await axios.get('/api/admin/logs/all');
+      const allLogs = response.data.data;
+
+      if (allLogs.length === 0) {
+        setError('沒有日誌可匯出');
+        setTimeout(() => setError(''), 3000);
+        return;
+      }
+
+      // 準備Excel數據
+      const excelData = allLogs.map((log: SystemLog) => {
+        let detailsText = '';
+        if (log.details) {
+          try {
+            const detailsObj = JSON.parse(log.details);
+            if (detailsObj.checks && Array.isArray(detailsObj.checks)) {
+              detailsText = detailsObj.checks.map((check: any) => 
+                `${check.name}: ${check.status} - ${check.message}`
+              ).join('; ');
+            } else {
+              detailsText = typeof detailsObj === 'string' ? detailsObj : JSON.stringify(detailsObj);
+            }
+          } catch {
+            detailsText = log.details;
+          }
+        }
+
+        return {
+          'ID': log.id,
+          '時間': log.created_at ? format(new Date(log.created_at), 'yyyy/MM/dd HH:mm:ss') : '',
+          '類型': log.log_type || '',
+          '級別': log.log_level || '',
+          '訊息': log.message || '',
+          '詳細資訊': detailsText,
+        };
+      });
+
+      // 創建工作簿
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(excelData);
+
+      // 設置列寬
+      const colWidths = [
+        { wch: 8 },  // ID
+        { wch: 20 }, // 時間
+        { wch: 15 }, // 類型
+        { wch: 10 }, // 級別
+        { wch: 40 }, // 訊息
+        { wch: 60 }, // 詳細資訊
+      ];
+      ws['!cols'] = colWidths;
+
+      // 添加工作表到工作簿
+      XLSX.utils.book_append_sheet(wb, ws, '系統日誌');
+
+      // 生成文件名（包含日期）
+      const fileName = `系統日誌_${format(new Date(), 'yyyy-MM-dd_HHmmss')}.xlsx`;
+
+      // 下載文件
+      XLSX.writeFile(wb, fileName);
+      setSuccess('日誌匯出成功');
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err: any) {
+      setError(err.response?.data?.message || '匯出日誌失敗');
+      setTimeout(() => setError(''), 3000);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -818,7 +894,31 @@ const Admin = () => {
 
           {/* 日誌管理 */}
           <div className="bg-white p-6 rounded-lg shadow">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4">日誌管理</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-800">日誌管理</h2>
+              <button
+                onClick={handleExportLogs}
+                disabled={loading}
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 disabled:opacity-50"
+                title="匯出所有日誌到Excel"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
+                </svg>
+                匯出Excel
+              </button>
+            </div>
 
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">

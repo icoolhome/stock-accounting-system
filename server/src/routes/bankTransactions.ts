@@ -84,7 +84,7 @@ router.get('/:id', async (req: AuthRequest, res) => {
 // 新增銀行明細
 router.post('/', async (req: AuthRequest, res) => {
   try {
-    const { bank_account_id, transaction_date, description, deposit_amount, withdrawal_amount } = req.body;
+    const { bank_account_id, transaction_date, description, transaction_category, deposit_amount, withdrawal_amount } = req.body;
 
     if (!bank_account_id || !transaction_date) {
       return res.status(400).json({
@@ -102,13 +102,14 @@ router.post('/', async (req: AuthRequest, res) => {
 
     // 插入銀行明細
     await run(
-      `INSERT INTO bank_transactions (user_id, bank_account_id, transaction_date, description, deposit_amount, withdrawal_amount)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO bank_transactions (user_id, bank_account_id, transaction_date, description, transaction_category, deposit_amount, withdrawal_amount)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         req.userId,
         bank_account_id,
         transaction_date,
         description || null,
+        transaction_category || null,
         deposit,
         withdrawal,
       ]
@@ -144,7 +145,7 @@ router.post('/', async (req: AuthRequest, res) => {
 router.put('/:id', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
-    const { bank_account_id, transaction_date, description, deposit_amount, withdrawal_amount } = req.body;
+    const { bank_account_id, transaction_date, description, transaction_category, deposit_amount, withdrawal_amount } = req.body;
 
     const db = getDatabase();
     const get = promisify(db.get.bind(db));
@@ -216,12 +217,13 @@ router.put('/:id', async (req: AuthRequest, res) => {
     // 更新銀行明細
     await run(
       `UPDATE bank_transactions 
-       SET bank_account_id = ?, transaction_date = ?, description = ?, deposit_amount = ?, withdrawal_amount = ?, updated_at = CURRENT_TIMESTAMP
+       SET bank_account_id = ?, transaction_date = ?, description = ?, transaction_category = ?, deposit_amount = ?, withdrawal_amount = ?, updated_at = CURRENT_TIMESTAMP
        WHERE id = ? AND user_id = ?`,
       [
         bank_account_id,
         transaction_date,
         description || null,
+        transaction_category || null,
         newDeposit,
         newWithdrawal,
         id,

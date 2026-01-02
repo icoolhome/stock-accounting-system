@@ -9,6 +9,14 @@ interface SecuritiesAccount {
   broker_name: string;
 }
 
+interface Currency {
+  id: number;
+  currency_code: string;
+  currency_name: string;
+  exchange_rate: number;
+  is_default: number;
+}
+
 interface Transaction {
   id: number;
   securities_account_id: number;
@@ -52,6 +60,7 @@ const TRANSACTION_TYPES = [
 const Transactions = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<SecuritiesAccount[]>([]);
+  const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
@@ -206,6 +215,7 @@ const Transactions = () => {
     fetchAccounts();
     fetchTransactions();
     fetchFeeSettings();
+    fetchCurrencies();
   }, [filters, currentPage, pageSize]);
 
   // 獲取手續費設定
@@ -220,6 +230,23 @@ const Transactions = () => {
       }
     } catch (err: any) {
       console.error('獲取設定失敗:', err);
+    }
+  };
+
+  // 獲取幣別設定
+  const fetchCurrencies = async () => {
+    try {
+      const response = await axios.get('/api/settings/currencies');
+      const currencyList = response.data.data || [];
+      setCurrencies(currencyList);
+      
+      // 設置預設幣別
+      if (currencyList.length > 0 && !formData.currency) {
+        const defaultCurrency = currencyList.find((c: Currency) => c.is_default) || currencyList[0];
+        setFormData(prev => ({ ...prev, currency: defaultCurrency.currency_code }));
+      }
+    } catch (err: any) {
+      console.error('獲取幣別設定失敗:', err);
     }
   };
 
@@ -430,7 +457,10 @@ const Transactions = () => {
       return_rate: '' as number | '',
       holding_cost: '' as number | '',
       health_insurance: '' as number | '',
-      currency: 'TWD',
+      currency: (() => {
+        const defaultCurrency = currencies.find((c) => c.is_default) || currencies[0];
+        return defaultCurrency?.currency_code || 'TWD';
+      })(),
       buy_reason: '',
     });
   };
@@ -1529,9 +1559,19 @@ const Transactions = () => {
                       className="px-3 py-2 border border-gray-300 rounded-md"
                       style={{ width: 'calc(50% + 2cm)' }}
                     >
-                      <option value="TWD">台幣</option>
-                      <option value="USD">美元</option>
-                      <option value="CNY">人民幣</option>
+                      {currencies.length > 0 ? (
+                        currencies.map((currency) => (
+                          <option key={currency.id} value={currency.currency_code}>
+                            {currency.currency_name}
+                          </option>
+                        ))
+                      ) : (
+                        <>
+                          <option value="TWD">台幣</option>
+                          <option value="USD">美元</option>
+                          <option value="CNY">人民幣</option>
+                        </>
+                      )}
                     </select>
                   </div>
                   <div className="col-span-4">

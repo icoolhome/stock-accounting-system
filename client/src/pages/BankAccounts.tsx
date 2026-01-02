@@ -9,6 +9,14 @@ interface SecuritiesAccount {
   broker_name: string;
 }
 
+interface Currency {
+  id: number;
+  currency_code: string;
+  currency_name: string;
+  exchange_rate: number;
+  is_default: number;
+}
+
 interface BankAccount {
   id: number;
   securities_account_id?: number;
@@ -29,6 +37,7 @@ interface BankTransaction {
   account_type?: string;
   transaction_date: string;
   description?: string;
+  transaction_category?: string;
   deposit_amount: number;
   withdrawal_amount: number;
 }
@@ -38,6 +47,7 @@ const ACCOUNT_TYPES = ['儲蓄帳戶', '支票帳戶', '投資帳戶', '信用�
 const BankAccounts = () => {
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
   const [securitiesAccounts, setSecuritiesAccounts] = useState<SecuritiesAccount[]>([]);
+  const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingAccount, setEditingAccount] = useState<BankAccount | null>(null);
@@ -67,15 +77,67 @@ const BankAccounts = () => {
     account_number: '',
     account_type: '儲蓄帳戶',
     balance: '' as number | '',
-    currency: 'TWD',
+    currency: 'TWD', // 將在 fetchCurrencies 後更新
   });
 
   const [transactionFormData, setTransactionFormData] = useState({
     bank_account_id: '',
     transaction_date: format(new Date(), 'yyyy-MM-dd'),
     description: '',
+    transaction_category: '',
     amount: '' as number | '', // 合併存入/支出：正數為存入，負數為支出
   });
+
+  // 銀行明細選項列表（可自由添加）
+  const [transactionCategories, setTransactionCategories] = useState<string[]>(() => {
+    const saved = localStorage.getItem('bank_transaction_categories');
+    return saved ? JSON.parse(saved) : ['集買', '集賣', '上市櫃劃撥交割款', '點精靈', '基金配息'];
+  });
+
+  const [newCategoryInput, setNewCategoryInput] = useState('');
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+
+  // 保存選項列表到 localStorage
+  const saveCategories = (categories: string[]) => {
+    setTransactionCategories(categories);
+    localStorage.setItem('bank_transaction_categories', JSON.stringify(categories));
+  };
+
+  // 添加新選項
+  const handleAddCategory = () => {
+    if (newCategoryInput.trim() && !transactionCategories.includes(newCategoryInput.trim())) {
+      const updated = [...transactionCategories, newCategoryInput.trim()];
+      saveCategories(updated);
+      setNewCategoryInput('');
+    }
+  };
+
+  // 刪除選項
+  const handleDeleteCategory = (categoryToDelete: string) => {
+    // 如果當前表單選中要刪除的選項，先清空選擇
+    if (transactionFormData.transaction_category === categoryToDelete) {
+      setTransactionFormData(prev => ({ ...prev, transaction_category: '' }));
+    }
+    const updated = transactionCategories.filter(cat => cat !== categoryToDelete);
+    saveCategories(updated);
+  };
+
+  // 點擊外部關閉選項下拉選單
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (showCategoryDropdown && !target.closest('.category-dropdown-container')) {
+        setShowCategoryDropdown(false);
+      }
+    };
+
+    if (showCategoryDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [showCategoryDropdown]);
 
   // 銀行明細查詢區間快捷選擇
   const handleTransactionDateRangeChange = (range: string) => {
@@ -140,7 +202,25 @@ const BankAccounts = () => {
     fetchSecuritiesAccounts();
     fetchAccounts();
     fetchBankTransactions();
+    fetchCurrencies();
   }, [currentPage, pageSize, transactionCurrentPage, transactionPageSize, transactionFilters]);
+
+  // 獲取幣別設定
+  const fetchCurrencies = async () => {
+    try {
+      const response = await axios.get('/api/settings/currencies');
+      const currencyList = response.data.data || [];
+      setCurrencies(currencyList);
+      
+      // 設置預設幣別
+      if (currencyList.length > 0 && formData.currency === 'TWD') {
+        const defaultCurrency = currencyList.find((c: Currency) => c.is_default) || currencyList[0];
+        setFormData(prev => ({ ...prev, currency: defaultCurrency.currency_code }));
+      }
+    } catch (err: any) {
+      console.error('獲取幣別設定失敗:', err);
+    }
+  };
 
   const fetchSecuritiesAccounts = async () => {
     try {
@@ -212,13 +292,14 @@ const BankAccounts = () => {
   };
 
   const resetForm = () => {
+    const defaultCurrency = currencies.find((c) => c.is_default) || currencies[0];
     setFormData({
       securities_account_id: '',
       bank_name: '',
       account_number: '',
       account_type: '儲蓄帳戶',
       balance: '' as number | '',
-      currency: 'TWD',
+      currency: defaultCurrency?.currency_code || 'TWD',
     });
   };
 
@@ -253,6 +334,7 @@ const BankAccounts = () => {
         bank_account_id: transactionFormData.bank_account_id,
         transaction_date: transactionFormData.transaction_date,
         description: transactionFormData.description,
+        transaction_category: transactionFormData.transaction_category || null,
         deposit_amount: amount > 0 ? amount : 0,
         withdrawal_amount: amount < 0 ? Math.abs(amount) : 0,
       };
@@ -282,6 +364,7 @@ const BankAccounts = () => {
       bank_account_id: transaction.bank_account_id.toString(),
       transaction_date: transaction.transaction_date,
       description: transaction.description || '',
+      transaction_category: transaction.transaction_category || '',
       amount: amount as number | '',
     });
     setShowTransactionModal(true);
@@ -303,6 +386,7 @@ const BankAccounts = () => {
       bank_account_id: '',
       transaction_date: format(new Date(), 'yyyy-MM-dd'),
       description: '',
+      transaction_category: '',
       amount: '' as number | '',
     });
   };
@@ -314,6 +398,7 @@ const BankAccounts = () => {
       '帳戶名稱': transaction.bank_name ? `${transaction.bank_name} - ${transaction.account_type || ''}` : '-',
       '帳務日期': transaction.transaction_date ? format(new Date(transaction.transaction_date), 'yyyy/MM/dd') : '',
       '摘要': transaction.description || '-',
+      '選項': transaction.transaction_category || '-',
       '存入': transaction.deposit_amount || 0,
       '支出': transaction.withdrawal_amount || 0,
     }));
@@ -326,6 +411,7 @@ const BankAccounts = () => {
       { wch: 25 }, // 帳戶名稱
       { wch: 12 }, // 帳務日期
       { wch: 30 }, // 摘要
+      { wch: 15 }, // 選項
       { wch: 12 }, // 存入
       { wch: 12 }, // 支出
     ];
@@ -629,6 +715,7 @@ const BankAccounts = () => {
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">帳戶名稱</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">帳務日期</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">摘要</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">選項</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">存入/支出</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase"></th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">操作</th>
@@ -660,6 +747,9 @@ const BankAccounts = () => {
                         <td className="px-6 py-4 text-sm text-gray-900">
                           {transaction.description || '-'}
                         </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {transaction.transaction_category || '-'}
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
                           {transaction.deposit_amount > 0 ? (
                             <span className="text-gray-900">${transaction.deposit_amount.toFixed(2)}</span>
@@ -670,10 +760,10 @@ const BankAccounts = () => {
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
                           <button
                             onClick={() => setExpandedTransactionId(expandedTransactionId === transaction.id ? null : transaction.id)}
-                            className="text-gray-500 hover:text-gray-700 text-lg"
+                            className="text-black hover:text-gray-700 text-lg"
                             title={expandedTransactionId === transaction.id ? '收起' : '展開'}
                           >
-                            {expandedTransactionId === transaction.id ? '▲' : '﹀'}
+                            {expandedTransactionId === transaction.id ? '▲' : '▼'}
                           </button>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -693,7 +783,7 @@ const BankAccounts = () => {
                       </tr>
                       {isExpanded && (
                         <tr key={`${transaction.id}-detail`} className="bg-gray-50">
-                          <td colSpan={7} className="px-6 py-3 text-sm">
+                          <td colSpan={8} className="px-6 py-3 text-sm">
                             <div className="space-y-1">
                               <div className="text-gray-700">
                                 <span className="font-medium">幣別：</span>
@@ -804,7 +894,7 @@ const BankAccounts = () => {
                       className="w-full px-3 py-2 border border-gray-300 rounded-md"
                     />
                   </div>
-                  <div className="col-span-2">
+                  <div className="col-span-1">
                     <label className="block text-sm font-medium text-gray-700 mb-1">摘要</label>
                     <input
                       type="text"
@@ -813,6 +903,92 @@ const BankAccounts = () => {
                       className="w-full px-3 py-2 border border-gray-300 rounded-md"
                       placeholder="請輸入摘要"
                     />
+                  </div>
+                  <div className="col-span-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">選項</label>
+                    <div className="relative category-dropdown-container">
+                      <div className="flex gap-2">
+                        <div className="flex-1 relative">
+                          <button
+                            type="button"
+                            onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
+                            className="w-full px-3 py-2 text-left border border-gray-300 rounded-md bg-white flex items-center justify-between"
+                          >
+                            <span className={transactionFormData.transaction_category ? 'text-gray-900' : 'text-gray-500'}>
+                              {transactionFormData.transaction_category || '請選擇'}
+                            </span>
+                            <svg className={`w-5 h-5 text-gray-400 transition-transform ${showCategoryDropdown ? 'transform rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </button>
+                          {showCategoryDropdown && (
+                            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+                              <div className="p-2 border-b border-gray-200 sticky top-0 bg-white">
+                                <div className="flex gap-1">
+                                  <input
+                                    type="text"
+                                    value={newCategoryInput}
+                                    onChange={(e) => setNewCategoryInput(e.target.value)}
+                                    onKeyPress={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleAddCategory();
+                                      }
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+                                    placeholder="新增選項"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleAddCategory();
+                                    }}
+                                    className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm"
+                                    title="添加新選項"
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="py-1">
+                                {transactionCategories.length === 0 ? (
+                                  <div className="px-3 py-2 text-sm text-gray-500 text-center">暫無選項</div>
+                                ) : (
+                                  transactionCategories.map((cat) => (
+                                    <div
+                                      key={cat}
+                                      className="flex items-center justify-between px-3 py-2 hover:bg-gray-100 cursor-pointer group"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setTransactionFormData({ ...transactionFormData, transaction_category: cat });
+                                        setShowCategoryDropdown(false);
+                                      }}
+                                    >
+                                      <span className={transactionFormData.transaction_category === cat ? 'text-blue-600 font-medium' : 'text-gray-900'}>
+                                        {cat}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDeleteCategory(cat);
+                                        }}
+                                        className="text-red-600 hover:text-red-800 hover:bg-red-100 rounded px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        title="刪除此選項"
+                                      >
+                                        ×
+                                      </button>
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                   <div className="col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1">存入/支出 *</label>
@@ -945,9 +1121,19 @@ const BankAccounts = () => {
                       onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md"
                     >
-                      <option value="TWD">台幣</option>
-                      <option value="USD">美元</option>
-                      <option value="CNY">人民幣</option>
+                      {currencies.length > 0 ? (
+                        currencies.map((currency) => (
+                          <option key={currency.id} value={currency.currency_code}>
+                            {currency.currency_name}
+                          </option>
+                        ))
+                      ) : (
+                        <>
+                          <option value="TWD">台幣</option>
+                          <option value="USD">美元</option>
+                          <option value="CNY">人民幣</option>
+                        </>
+                      )}
                     </select>
                   </div>
                 </div>

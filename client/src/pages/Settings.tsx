@@ -31,6 +31,8 @@ const Settings = () => {
   const [tradingSettings, setTradingSettings] = useState({
     addPositionThreshold: -5, // 加倉點位（%）
     sellPositionThreshold: 10, // 賣出點位（%）
+    addPositionSound: '', // 加倉提醒聲音URL
+    sellPositionSound: '', // 賣出提醒聲音URL
   });
 
   // 介面設定
@@ -1399,6 +1401,36 @@ const Settings = () => {
               />
               <p className="mt-1 text-sm text-gray-500">
                 股價上漲超過此百分比時提醒賣出（正數標示漲幅）
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                加倉提醒聲音（URL或檔案路徑）
+              </label>
+              <input
+                type="text"
+                value={tradingSettings.addPositionSound || ''}
+                onChange={(e) => setTradingSettings({ ...tradingSettings, addPositionSound: e.target.value })}
+                className="px-3 py-2 border border-gray-300 rounded-md w-full"
+                placeholder="https://example.com/sound.mp3 或 /sounds/add-position.mp3"
+              />
+              <p className="mt-1 text-sm text-gray-500">
+                當達到加倉點位時播放的聲音（可選）
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                賣出提醒聲音（URL或檔案路徑）
+              </label>
+              <input
+                type="text"
+                value={tradingSettings.sellPositionSound || ''}
+                onChange={(e) => setTradingSettings({ ...tradingSettings, sellPositionSound: e.target.value })}
+                className="px-3 py-2 border border-gray-300 rounded-md w-full"
+                placeholder="https://example.com/sound.mp3 或 /sounds/sell-position.mp3"
+              />
+              <p className="mt-1 text-sm text-gray-500">
+                當達到賣出點位時播放的聲音（可選）
               </p>
             </div>
             <div className="bg-blue-50 p-4 rounded-lg">

@@ -11,6 +11,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const menuItems = [
     { path: '/', label: '儀表版' },
+    { path: '/welcome-guide', label: '使用指南' },
+    { path: '/stock-announcements', label: '個股查詢' },
     { path: '/transactions', label: '交易記錄' },
     { path: '/settlements', label: '交割管理' },
     { path: '/bank-accounts', label: '銀行帳戶' },

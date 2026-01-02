@@ -9,6 +9,8 @@ import BankAccounts from './pages/BankAccounts';
 import Holdings from './pages/Holdings';
 import Portfolio from './pages/Portfolio';
 import Dividends from './pages/Dividends';
+import StockAnnouncements from './pages/StockAnnouncements';
+import WelcomeGuide from './pages/WelcomeGuide';
 import Settings from './pages/Settings';
 import Admin from './pages/Admin';
 import PrivateRoute from './components/PrivateRoute';
@@ -86,6 +88,26 @@ function App() {
               <PrivateRoute>
                 <Layout>
                   <Dividends />
+                </Layout>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/stock-announcements"
+            element={
+              <PrivateRoute>
+                <Layout>
+                  <StockAnnouncements />
+                </Layout>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/welcome-guide"
+            element={
+              <PrivateRoute>
+                <Layout>
+                  <WelcomeGuide />
                 </Layout>
               </PrivateRoute>
             }

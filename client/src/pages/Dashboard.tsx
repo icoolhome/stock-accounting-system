@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 
 interface Transaction {
@@ -32,10 +32,23 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [selectedRecentTransactionId, setSelectedRecentTransactionId] = useState<number | null>(null);
   const [quickShortcutFilter, setQuickShortcutFilter] = useState<string>('all');
+  const [showWelcomeGuide, setShowWelcomeGuide] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchDashboardData();
+    
+    // 檢查是否顯示初始使用提示
+    const hasSeenGuide = localStorage.getItem('hasSeenWelcomeGuide');
+    if (!hasSeenGuide) {
+      setShowWelcomeGuide(true);
+    }
   }, []);
+
+  const handleCloseWelcomeGuide = () => {
+    setShowWelcomeGuide(false);
+    localStorage.setItem('hasSeenWelcomeGuide', 'true');
+  };
 
   const fetchDashboardData = async () => {
     try {
@@ -85,6 +98,168 @@ const Dashboard = () => {
 
   return (
     <div className="px-4 py-6 sm:px-0">
+      {/* 初始使用提示小窗 */}
+      {showWelcomeGuide && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between rounded-t-lg">
+              <h2 className="text-xl font-bold text-gray-800">歡迎使用股票記帳系統</h2>
+              <button
+                onClick={handleCloseWelcomeGuide}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="px-6 py-6">
+              <p className="text-gray-600 mb-6">為了讓您快速開始使用系統，請按照以下步驟進行初始設定：</p>
+              
+              <div className="space-y-4">
+                <div className="flex items-start gap-4 p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
+                  <div className="flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold">
+                    1
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-gray-800 font-medium mb-1">新增證券帳戶</p>
+                    <p className="text-sm text-gray-600 mb-2">
+                      進入<span className="font-medium">系統設定</span> → <span className="font-medium">帳戶相關</span> → 
+                      點擊<span className="font-medium">前往證券帳戶管理</span> → <span className="font-medium">新增證券帳戶</span>
+                    </p>
+                    <button
+                      onClick={() => {
+                        navigate('/settings');
+                        handleCloseWelcomeGuide();
+                      }}
+                      className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                    >
+                      前往設定 →
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-4 p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors">
+                  <div className="flex-shrink-0 w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center font-bold">
+                    2
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-gray-800 font-medium mb-1">新增銀行帳戶</p>
+                    <p className="text-sm text-gray-600 mb-2">
+                      進入<span className="font-medium">銀行帳戶</span> → <span className="font-medium">新增銀行帳戶</span>
+                    </p>
+                    <button
+                      onClick={() => {
+                        navigate('/bank-accounts');
+                        handleCloseWelcomeGuide();
+                      }}
+                      className="text-sm text-green-600 hover:text-green-800 font-medium"
+                    >
+                      前往銀行帳戶 →
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-4 p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors">
+                  <div className="flex-shrink-0 w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center font-bold">
+                    3
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-gray-800 font-medium mb-1">更新股票資料</p>
+                    <p className="text-sm text-gray-600 mb-2">
+                      進入<span className="font-medium">系統設定</span> → <span className="font-medium">API設定</span> → 
+                      點擊<span className="font-medium">更新股票資料</span> → <span className="font-medium">保存設定</span>
+                    </p>
+                    <button
+                      onClick={() => {
+                        navigate('/settings');
+                        handleCloseWelcomeGuide();
+                      }}
+                      className="text-sm text-purple-600 hover:text-purple-800 font-medium"
+                    >
+                      前往設定 →
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-4 p-4 bg-yellow-50 rounded-lg hover:bg-yellow-100 transition-colors">
+                  <div className="flex-shrink-0 w-8 h-8 bg-yellow-600 text-white rounded-full flex items-center justify-center font-bold">
+                    4
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-gray-800 font-medium mb-1">新增交易記錄</p>
+                    <p className="text-sm text-gray-600 mb-2">
+                      進入<span className="font-medium">交易記錄</span> → <span className="font-medium">新增交易記錄</span>
+                    </p>
+                    <button
+                      onClick={() => {
+                        navigate('/transactions');
+                        handleCloseWelcomeGuide();
+                      }}
+                      className="text-sm text-yellow-600 hover:text-yellow-800 font-medium"
+                    >
+                      前往交易記錄 →
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-4 p-4 bg-red-50 rounded-lg hover:bg-red-100 transition-colors">
+                  <div className="flex-shrink-0 w-8 h-8 bg-red-600 text-white rounded-full flex items-center justify-center font-bold">
+                    5
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-gray-800 font-medium mb-1">新增交割記錄</p>
+                    <p className="text-sm text-gray-600 mb-2">
+                      進入<span className="font-medium">交割管理</span> → <span className="font-medium">新增交割記錄</span>
+                    </p>
+                    <button
+                      onClick={() => {
+                        navigate('/settlements');
+                        handleCloseWelcomeGuide();
+                      }}
+                      className="text-sm text-red-600 hover:text-red-800 font-medium"
+                    >
+                      前往交割管理 →
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-4 p-4 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors">
+                  <div className="flex-shrink-0 w-8 h-8 bg-indigo-600 text-white rounded-full flex items-center justify-center font-bold">
+                    6
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-gray-800 font-medium mb-1">新增銀行明細</p>
+                    <p className="text-sm text-gray-600 mb-2">
+                      進入<span className="font-medium">銀行帳戶</span> → <span className="font-medium">新增銀行明細</span>
+                    </p>
+                    <button
+                      onClick={() => {
+                        navigate('/bank-accounts');
+                        handleCloseWelcomeGuide();
+                      }}
+                      className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+                    >
+                      前往銀行帳戶 →
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-end gap-3 rounded-b-lg">
+              <button
+                onClick={handleCloseWelcomeGuide}
+                className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
+              >
+                我知道了
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="space-y-6">
         {/* 投資組合儀表版 */}
         <div className="bg-white shadow rounded-lg p-6">
@@ -151,6 +326,8 @@ const Dashboard = () => {
                 <option value="holdings">庫存 / 投資組合</option>
                 <option value="income">收益 / 交割</option>
                 <option value="bank">銀行帳戶</option>
+                <option value="search">查詢 / 指南</option>
+                <option value="settings">系統設定</option>
               </select>
             </div>
           </div>
@@ -207,6 +384,42 @@ const Dashboard = () => {
               >
                 <div className="text-2xl mb-2">🏦</div>
                 <div className="text-sm font-medium text-gray-700">銀行帳戶管理</div>
+              </Link>
+            )}
+            {(quickShortcutFilter === 'all' || quickShortcutFilter === 'search') && (
+              <Link
+                to="/stock-announcements"
+                className="bg-indigo-50 hover:bg-indigo-100 p-4 rounded-lg text-center transition-colors"
+              >
+                <div className="text-2xl mb-2">🔍</div>
+                <div className="text-sm font-medium text-gray-700">個股查詢</div>
+              </Link>
+            )}
+            {(quickShortcutFilter === 'all' || quickShortcutFilter === 'search') && (
+              <Link
+                to="/welcome-guide"
+                className="bg-pink-50 hover:bg-pink-100 p-4 rounded-lg text-center transition-colors"
+              >
+                <div className="text-2xl mb-2">📖</div>
+                <div className="text-sm font-medium text-gray-700">使用指南</div>
+              </Link>
+            )}
+            {(quickShortcutFilter === 'all' || quickShortcutFilter === 'trade') && (
+              <Link
+                to="/securities-accounts"
+                className="bg-cyan-50 hover:bg-cyan-100 p-4 rounded-lg text-center transition-colors"
+              >
+                <div className="text-2xl mb-2">📋</div>
+                <div className="text-sm font-medium text-gray-700">證券帳戶</div>
+              </Link>
+            )}
+            {(quickShortcutFilter === 'all' || quickShortcutFilter === 'settings') && (
+              <Link
+                to="/settings"
+                className="bg-gray-50 hover:bg-gray-100 p-4 rounded-lg text-center transition-colors"
+              >
+                <div className="text-2xl mb-2">⚙️</div>
+                <div className="text-sm font-medium text-gray-700">系統設定</div>
               </Link>
             )}
           </div>

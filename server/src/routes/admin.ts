@@ -501,6 +501,23 @@ router.get('/logs', async (req, res) => {
   }
 });
 
+// 獲取所有系統日誌（不分頁，用於匯出）
+router.get('/logs/all', async (req, res) => {
+  try {
+    const logs = await all('SELECT * FROM system_logs ORDER BY created_at DESC');
+
+    res.json({
+      success: true,
+      data: logs,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message || '獲取所有日誌失敗',
+    });
+  }
+});
+
 // 刪除日誌
 router.delete('/logs/:id', async (req, res) => {
   try {

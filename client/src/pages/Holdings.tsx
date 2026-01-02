@@ -78,6 +78,13 @@ const Holdings = () => {
   const [currentDetailPage, setCurrentDetailPage] = useState(1);
   const [detailPageSize, setDetailPageSize] = useState(10);
   const [refreshingPrices, setRefreshingPrices] = useState(false);
+  const [tradingSettings, setTradingSettings] = useState({
+    addPositionThreshold: -5,
+    sellPositionThreshold: 10,
+    addPositionSound: '',
+    sellPositionSound: '',
+  });
+  const [playedSounds, setPlayedSounds] = useState<Set<string>>(new Set());
 
   const handleExportHoldingsExcel = () => {
     // TODO: 實作匯出庫存列表到 Excel 的功能
@@ -92,7 +99,83 @@ const Holdings = () => {
   useEffect(() => {
     fetchAccounts();
     fetchHoldings();
+    fetchTradingSettings();
   }, [filters, currentPage, pageSize]);
+
+  // 獲取交易設定
+  const fetchTradingSettings = async () => {
+    try {
+      const response = await axios.get('/api/settings');
+      if (response.data.data?.tradingSettings) {
+        setTradingSettings(response.data.data.tradingSettings);
+      }
+    } catch (err: any) {
+      console.error('獲取交易設定失敗:', err);
+    }
+  };
+
+  // 檢查並觸發提醒（僅在數據更新時觸發）
+  useEffect(() => {
+    if (!holdings.length) return;
+    
+    holdings.forEach((holding) => {
+      const stockKey = `${holding.stock_code}_${holding.securities_account_id || 0}`;
+      const profitLossPercent = holding.profit_loss_percent || 0;
+      
+      // 檢查加倉提醒
+      if (profitLossPercent <= tradingSettings.addPositionThreshold && tradingSettings.addPositionSound) {
+        const soundKey = `${stockKey}_add`;
+        if (!playedSounds.has(soundKey)) {
+          try {
+            const audio = new Audio(tradingSettings.addPositionSound);
+            audio.volume = 0.5; // 設置音量為50%
+            audio.play().catch((err) => {
+              console.error('播放加倉提醒聲音失敗:', err);
+            });
+            setPlayedSounds(prev => new Set(prev).add(soundKey));
+            
+            // 5秒後允許再次播放（避免重複播放）
+            setTimeout(() => {
+              setPlayedSounds(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(soundKey);
+                return newSet;
+              });
+            }, 5000);
+          } catch (err) {
+            console.error('創建音頻對象失敗:', err);
+          }
+        }
+      }
+      
+      // 檢查賣出提醒
+      if (profitLossPercent >= tradingSettings.sellPositionThreshold && tradingSettings.sellPositionSound) {
+        const soundKey = `${stockKey}_sell`;
+        if (!playedSounds.has(soundKey)) {
+          try {
+            const audio = new Audio(tradingSettings.sellPositionSound);
+            audio.volume = 0.5; // 設置音量為50%
+            audio.play().catch((err) => {
+              console.error('播放賣出提醒聲音失敗:', err);
+            });
+            setPlayedSounds(prev => new Set(prev).add(soundKey));
+            
+            // 5秒後允許再次播放（避免重複播放）
+            setTimeout(() => {
+              setPlayedSounds(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(soundKey);
+                return newSet;
+              });
+            }, 5000);
+          } catch (err) {
+            console.error('創建音頻對象失敗:', err);
+          }
+        }
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [holdings, tradingSettings.addPositionThreshold, tradingSettings.sellPositionThreshold, tradingSettings.addPositionSound, tradingSettings.sellPositionSound]);
 
   const fetchAccounts = async () => {
     try {
@@ -129,6 +212,7 @@ const Holdings = () => {
   const handleRefreshPrices = async () => {
     try {
       setRefreshingPrices(true);
+      setPlayedSounds(new Set()); // 重置已播放聲音列表，允許重新播放
       await fetchHoldings();
     } finally {
       setRefreshingPrices(false);
@@ -270,6 +354,7 @@ const Holdings = () => {
                     <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">持有成本</th>
                     <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">盈虧</th>
                     <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">盈虧(％)</th>
+                    <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase whitespace-nowrap">買賣點</th>
                     <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">預估息</th>
                     <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">買未入</th>
                     <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">賣未入</th>
@@ -373,6 +458,26 @@ const Holdings = () => {
                           holding.profit_loss_percent >= 0 ? 'text-red-600' : 'text-green-600'
                         }`}>
                           {formatPercentage(holding.profit_loss_percent)}
+                        </td>
+                        {/* 買賣點 */}
+                        <td className="px-3 py-4 whitespace-nowrap text-sm text-center">
+                          {(() => {
+                            const profitLossPercent = holding.profit_loss_percent || 0;
+                            if (profitLossPercent <= tradingSettings.addPositionThreshold) {
+                              return (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800" title={`已達到加倉點位（${tradingSettings.addPositionThreshold}%）`}>
+                                  ⬇️ 加倉
+                                </span>
+                              );
+                            } else if (profitLossPercent >= tradingSettings.sellPositionThreshold) {
+                              return (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800" title={`已達到賣出點位（${tradingSettings.sellPositionThreshold}%）`}>
+                                  ⬆️ 賣出
+                                </span>
+                              );
+                            }
+                            return <span className="text-gray-400">-</span>;
+                          })()}
                         </td>
                         {/* 預估息 */}
                         <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
@@ -498,6 +603,8 @@ const Holdings = () => {
                         }`}>
                           {formatTotalPercentage(totalProfitLossPercent)}
                         </td>
+                        {/* 買賣點 */}
+                        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900 text-center">-</td>
                         {/* 預估息 */}
                         <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900 text-right font-bold">
                           {formatTotalValue(totals.estimated_dividend)}

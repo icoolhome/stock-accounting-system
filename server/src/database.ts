@@ -326,6 +326,7 @@ export const initDatabase = async (): Promise<void> => {
       bank_account_id INTEGER NOT NULL,
       transaction_date TEXT NOT NULL,
       description TEXT,
+      transaction_category TEXT,
       deposit_amount REAL DEFAULT 0,
       withdrawal_amount REAL DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -334,6 +335,16 @@ export const initDatabase = async (): Promise<void> => {
       FOREIGN KEY (bank_account_id) REFERENCES bank_accounts(id) ON DELETE CASCADE
     )
   `);
+
+  // 為現有數據庫添加 transaction_category 字段（如果不存在）
+  try {
+    await run(`ALTER TABLE bank_transactions ADD COLUMN transaction_category TEXT`);
+  } catch (e: any) {
+    // 字段已存在，忽略錯誤
+    if (!e.message.includes('duplicate column')) {
+      console.warn('添加 transaction_category 字段時出現錯誤（可能字段已存在）:', e.message);
+    }
+  }
 
   console.log('資料庫表已初始化');
 };
