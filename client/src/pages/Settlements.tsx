@@ -81,6 +81,9 @@ const Settlements = () => {
   const [showTransactionDetail, setShowTransactionDetail] = useState(false);
   const [selectedTransactions, setSelectedTransactions] = useState<Transaction[]>([]);
   const [selectedSettlementForDetail, setSelectedSettlementForDetail] = useState<number | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [modalPosition, setModalPosition] = useState<{ x: number | null; y: number | null }>({ x: null, y: null });
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
     fetchBankAccounts();
@@ -222,6 +225,8 @@ const Settlements = () => {
         status: status,
         notes: settlement.notes || '',
       });
+      // 重置模態框位置到中間
+      setModalPosition({ x: null, y: null });
       setShowModal(true);
     } catch (error) {
       console.error('編輯交割記錄時發生錯誤:', error);
@@ -237,6 +242,46 @@ const Settlements = () => {
     } catch (err: any) {
       setError(err.response?.data?.message || '刪除失敗');
     }
+  };
+
+  const handleModalMouseDown = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('input, select, textarea, button')) {
+      return;
+    }
+    const modalElement = e.currentTarget as HTMLElement;
+    const rect = modalElement.getBoundingClientRect();
+    
+    // 如果當前是居中狀態，先計算實際位置
+    let currentX = modalPosition.x;
+    let currentY = modalPosition.y;
+    
+    if (currentX === null || currentY === null) {
+      // 居中狀態，計算實際像素位置
+      currentX = rect.left;
+      currentY = rect.top;
+      setModalPosition({ x: currentX, y: currentY });
+    }
+    
+    setDragging(true);
+    setDragStart({
+      x: e.clientX - currentX,
+      y: e.clientY - currentY,
+    });
+  };
+
+  const handleModalMouseMove = (e: React.MouseEvent) => {
+    if (dragging) {
+      const newX = e.clientX - dragStart.x;
+      const newY = e.clientY - dragStart.y;
+      setModalPosition({
+        x: newX,
+        y: newY,
+      });
+    }
+  };
+
+  const handleModalMouseUp = () => {
+    setDragging(false);
   };
 
   const resetForm = () => {
@@ -386,6 +431,8 @@ const Settlements = () => {
             <button
               onClick={() => {
                 resetForm();
+                // 重置模態框位置到中間
+                setModalPosition({ x: null, y: null });
                 setShowModal(true);
               }}
               className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium"
@@ -901,9 +948,24 @@ const Settlements = () => {
 
         {/* 新增/編輯模態框 */}
         {showModal && (
-          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-            <div className="relative top-20 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">
+          <div
+            className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50"
+            onMouseMove={handleModalMouseMove}
+            onMouseUp={handleModalMouseUp}
+          >
+            <div
+              className="relative mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white"
+              style={{
+                position: 'fixed',
+                top: modalPosition.y === null ? '50%' : `${modalPosition.y}px`,
+                left: modalPosition.x === null ? '50%' : `${modalPosition.x}px`,
+                transform: modalPosition.y === null ? 'translate(-50%, -50%)' : 'none',
+                maxHeight: '90vh',
+                overflowY: 'auto',
+              }}
+              onMouseDown={handleModalMouseDown}
+            >
+              <h3 className="text-lg font-bold text-gray-900 mb-4 cursor-move">
                 {editingSettlement ? '編輯交割記錄' : '新增交割記錄'}
               </h3>
               <form onSubmit={handleSubmit} className="space-y-4">

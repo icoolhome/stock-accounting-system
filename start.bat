@@ -1,62 +1,165 @@
 @echo off
-chcp 65001 >nul
+setlocal enabledelayedexpansion
+chcp 936 >nul 2>&1
 echo ========================================
-echo   è‚¡ç¥¨è¨˜å¸³ç³»çµ± - å•Ÿå‹•ä¼ºæœå™¨
+echo   ¹ÉÆ±Ó›Ž¤Ïµ½y - †¢„Ó
 echo ========================================
 echo.
 
-REM æª¢æŸ¥æ˜¯å¦å·²å»ºç½®
+cd /d "%~dp0"
+
+where node >nul 2>&1
+if errorlevel 1 (
+    echo [åeÕ`] ÕÒ²»µ½ Node.js£¬Õˆ°²Ñb Node.js
+    echo ÏÂÝd¾WÖ·: https://nodejs.org/
+    pause
+    exit /b 1
+)
+
+set NEED_BUILD_SERVER=0
+set NEED_BUILD_CLIENT=0
+
 if not exist "server\dist\index.js" (
-    echo [è­¦å‘Š] ä¼ºæœå™¨å°šæœªå»ºç½®ï¼Œæ­£åœ¨å»ºç½®...
-    cd server
-    call npm run build
-    if %errorlevel% neq 0 (
-        echo [éŒ¯èª¤] ä¼ºæœå™¨å»ºç½®å¤±æ•—
-        cd ..
-        pause
-        exit /b 1
-    )
-    cd ..
+    echo [¾¯¸æ] ÕÒ²»µ½ server\dist\index.js£¬Œ¢ßMÐÐ½¨ÖÃ
+    set NEED_BUILD_SERVER=1
 )
 
 if not exist "client\dist" (
-    echo [è­¦å‘Š] å®¢æˆ¶ç«¯å°šæœªå»ºç½®ï¼Œæ­£åœ¨å»ºç½®...
-    cd client
-    call npm run build
-    if %errorlevel% neq 0 (
-        echo [éŒ¯èª¤] å®¢æˆ¶ç«¯å»ºç½®å¤±æ•—
-        cd ..
+    echo [¾¯¸æ] ÕÒ²»µ½ client\dist£¬Œ¢ßMÐÐ½¨ÖÃ
+    set NEED_BUILD_CLIENT=1
+)
+
+if %NEED_BUILD_SERVER%==1 (
+    echo [ÙYÓ] ½¨ÖÃËÅ·þÆ÷...
+    cd /d "%~dp0server"
+    if not exist "package.json" (
+        echo [åeÕ`] ÕÒ²»µ½ server\package.json
+        cd /d "%~dp0"
         pause
         exit /b 1
     )
-    cd ..
+    call npm run build
+    if errorlevel 1 (
+        echo [åeÕ`] ËÅ·þÆ÷½¨ÖÃÊ§”¡
+        cd /d "%~dp0"
+        pause
+        exit /b 1
+    )
+    cd /d "%~dp0"
+    echo [Íê³É] ËÅ·þÆ÷½¨ÖÃÍê³É
 )
 
-echo [è³‡è¨Š] å•Ÿå‹•ä¼ºæœå™¨ï¼ˆå¾Œç«¯ APIï¼‰...
-start "è‚¡ç¥¨è¨˜å¸³ç³»çµ± - ä¼ºæœå™¨" cmd /k "cd server && npm start"
+if %NEED_BUILD_CLIENT%==1 (
+    echo [ÙYÓ] ½¨ÖÃ¿Í‘ô¶Ë...
+    cd /d "%~dp0client"
+    if not exist "package.json" (
+        echo [åeÕ`] ÕÒ²»µ½ client\package.json
+        cd /d "%~dp0"
+        pause
+        exit /b 1
+    )
+    call npm run build
+    if errorlevel 1 (
+        echo [åeÕ`] ¿Í‘ô¶Ë½¨ÖÃÊ§”¡
+        cd /d "%~dp0"
+        pause
+        exit /b 1
+    )
+    cd /d "%~dp0"
+    echo [Íê³É] ¿Í‘ô¶Ë½¨ÖÃÍê³É
+)
 
-REM ç­‰å¾…ä¼ºæœå™¨å•Ÿå‹•
-timeout /t 3 /nobreak >nul
+echo.
+echo ========================================
+echo   ßx“ñß\ÐÐÄ£Ê½
+echo ========================================
+echo   1. Õý³£Ä£Ê½ (ï@Ê¾Ò•´°)
+echo   2. ±³¾°Ä£Ê½ (ë[²ØÒ•´°)
+echo ========================================
+echo.
+set /p MODE="Õˆßx“ñÄ£Ê½ (1 »ò 2£¬îAÔOžé 1): "
 
-echo [è³‡è¨Š] å•Ÿå‹•å®¢æˆ¶ç«¯ï¼ˆå‰ç«¯ï¼‰...
-start "è‚¡ç¥¨è¨˜å¸³ç³»çµ± - å®¢æˆ¶ç«¯" cmd /k "cd client && npm run preview"
+if "%MODE%"=="" set MODE=1
+if "%MODE%"=="2" goto background_mode
+if "%MODE%"=="1" goto normal_mode
+goto normal_mode
 
-REM ç­‰å¾…å®¢æˆ¶ç«¯å•Ÿå‹•
+:normal_mode
+echo.
+echo [ÙYÓ] ÒÔÕý³£Ä£Ê½†¢„Ó·þ„Õ£¨ÕûºÏÒ•´°£©...
+echo [ÙYÓ] ËÅ·þÆ÷: http://localhost:3001
+echo [ÙYÓ] ¿Í‘ô¶Ë: http://localhost:3000
+echo.
+echo ========================================
+echo   ÖØÒª: ÕˆÎðêPé]´ËÒ•´°£¡
+echo   ========================================
+echo   ·þ„ÕÕýÔÚ´ËÒ•´°ÖÐß\ÐÐ¡£
+echo   Ê¹ÓÃ Ctrl+C ¿ÉÍ£Ö¹ËùÓÐ·þ„Õ¡£
+echo ========================================
+echo.
+
+cd /d "%~dp0"
+
+REM Ê¹ÓÃ concurrently ÔÚÍ¬Ò»‚€´°¿ÚÖÐß\ÐÐËùÓÐ·þ„Õ
+if exist "node_modules\concurrently\dist\bin\concurrently.js" (
+    call npm start
+) else (
+    echo [åeÕ`] ÕÒ²»µ½ concurrently£¬ÕˆÏÈˆÌÐÐ: npm install
+    pause
+    exit /b 1
+)
+
+exit /b 0
+
+:background_mode
+echo.
+echo [ÙYÓ] ÒÔ±³¾°Ä£Ê½†¢„Ó·þ„Õ...
+echo [ÙYÓ] ËÅ·þÆ÷: http://localhost:3001
+echo [ÙYÓ] ¿Í‘ô¶Ë: http://localhost:3000
+echo.
+
+set VBS_BACKEND=%TEMP%\start_backend_hidden.vbs
+echo Set WshShell = CreateObject("WScript.Shell") > "%VBS_BACKEND%"
+echo WshShell.CurrentDirectory = "%~dp0server" >> "%VBS_BACKEND%"
+echo WshShell.Run "cmd /c npm start", 0, False >> "%VBS_BACKEND%"
+
+echo [ÙYÓ] ÕýÔÚ†¢„Óáá¶ËËÅ·þÆ÷...
+cscript //nologo "%VBS_BACKEND%"
+
+echo [ÙYÓ] µÈ´ýáá¶ËËÅ·þÆ÷†¢„Ó...
 timeout /t 5 /nobreak >nul
 
-echo [è³‡è¨Š] é–‹å•Ÿç€è¦½å™¨...
-start http://localhost:4173
+:check_backend_bg
+netstat -ano | findstr ":3001" | findstr "LISTENING" >nul 2>&1
+if errorlevel 1 (
+    timeout /t 2 /nobreak >nul
+    goto check_backend_bg
+)
+
+echo [Íê³É] áá¶ËËÅ·þÆ÷ÒÑ¾Í¾w
+
+set VBS_FRONTEND=%TEMP%\start_frontend_hidden.vbs
+echo Set WshShell = CreateObject("WScript.Shell") > "%VBS_FRONTEND%"
+echo WshShell.CurrentDirectory = "%~dp0" >> "%VBS_FRONTEND%"
+echo WshShell.Run "cmd /c npm run start:client", 0, False >> "%VBS_FRONTEND%"
+
+echo [ÙYÓ] ÕýÔÚ†¢„ÓÇ°¶ËËÅ·þÆ÷...
+cscript //nologo "%VBS_FRONTEND%"
+
+timeout /t 3 /nobreak >nul
+
+start http://localhost:3000
+
+del "%VBS_BACKEND%" >nul 2>&1
+del "%VBS_FRONTEND%" >nul 2>&1
 
 echo.
-echo ========================================
-echo   ç³»çµ±å·²å•Ÿå‹•ï¼
-echo ========================================
-echo.
-echo ä¼ºæœå™¨é‹è¡Œåœ¨: http://localhost:3001
-echo å®¢æˆ¶ç«¯é‹è¡Œåœ¨: http://localhost:4173
-echo.
-echo ç€è¦½å™¨å·²è‡ªå‹•é–‹å•Ÿ
-echo æŒ‰ Ctrl+C å¯åœæ­¢ä¼ºæœå™¨
+echo [Íê³É] ·þ„ÕÒÑÒÔ±³¾°Ä£Ê½†¢„Ó¡£
+echo [ÙYÓ] ËÅ·þÆ÷ºÍ¿Í‘ô¶ËÕýÔÚë[²ØÒ•´°ÖÐß\ÐÐ¡£
+echo [ÙYÓ] ÒªÍ£Ö¹·þ„Õ£¬Äú¿ÉÒÔ£º
+echo       1. ˆÌÐÐ stop.bat
+echo       2. Ê¹ÓÃ¹¤×÷¹ÜÀí†T½YÊø node.exe ³ÌÐò
+echo       3. ÊÖ„ÓêPé]ë[²ØµÄÃüÁîÒ•´°
 echo.
 pause
-
+exit /b 0

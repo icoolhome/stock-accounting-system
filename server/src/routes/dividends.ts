@@ -1,7 +1,6 @@
 import express from 'express';
-import { getDatabase } from '../database';
+import { all, get, run } from '../database';
 import { authenticate, AuthRequest } from '../middleware/auth';
-import { promisify } from 'util';
 
 const router = express.Router();
 
@@ -11,9 +10,6 @@ router.use(authenticate);
 router.get('/', async (req: AuthRequest, res) => {
   try {
     const { startDate, endDate, incomeType, stockCode } = req.query;
-    const db = getDatabase();
-    const all = promisify(db.all.bind(db));
-
     let query = 'SELECT * FROM dividends WHERE user_id = ?';
     const params: any[] = [req.userId];
 
@@ -36,16 +32,30 @@ router.get('/', async (req: AuthRequest, res) => {
 
     query += ' ORDER BY record_date DESC, created_at DESC';
 
-    const dividends = await all(query, params);
+    const dividends = await all<any>(query, params);
+
+    // 獲取收益類型配置（用於統計計算）
+    const incomeTypes = await all<any>(
+      'SELECT type_name, is_dividend FROM income_types WHERE user_id = ?',
+      [req.userId]
+    );
+
+    // 構建股息類型名稱集合
+    const dividendTypeNames = new Set(
+      incomeTypes.filter((t: any) => t.is_dividend === 1).map((t: any) => t.type_name)
+    );
+    const capitalGainTypeNames = new Set(
+      incomeTypes.filter((t: any) => t.type_name === '資本利得').map((t: any) => t.type_name)
+    );
 
     // 計算統計
     const totalAfterTax = dividends.reduce((sum: number, d: any) => sum + (d.after_tax_amount || 0), 0);
     const totalProfitLoss = 0; // 需要從交易記錄計算
     const totalDividend = dividends
-      .filter((d: any) => d.income_type === '股息' || d.income_type === 'ETF股息')
+      .filter((d: any) => dividendTypeNames.has(d.income_type))
       .reduce((sum: number, d: any) => sum + (d.after_tax_amount || 0), 0);
     const totalCapitalGain = dividends
-      .filter((d: any) => d.income_type === '資本利得')
+      .filter((d: any) => capitalGainTypeNames.has(d.income_type))
       .reduce((sum: number, d: any) => sum + (d.after_tax_amount || 0), 0);
     const totalTax = dividends.reduce((sum: number, d: any) => sum + (d.tax_amount || 0), 0);
 
@@ -72,9 +82,6 @@ router.get('/', async (req: AuthRequest, res) => {
 router.get('/exrights', async (req: AuthRequest, res) => {
   try {
     const { startDate, endDate, stockCode } = req.query;
-    const db = getDatabase();
-    const all = promisify(db.all.bind(db));
-
     let query = 'SELECT * FROM twse_exrights WHERE 1 = 1';
     const params: any[] = [];
 
@@ -93,7 +100,7 @@ router.get('/exrights', async (req: AuthRequest, res) => {
 
     query += ' ORDER BY record_date DESC, stock_code ASC';
 
-    const rows = await all(query, params);
+    const rows = await all<any>(query, params);
 
     res.json({
       success: true,
@@ -112,7 +119,7 @@ router.post('/', async (req: AuthRequest, res) => {
   try {
     const {
       record_date,
-      income_type = '全部',
+      income_type,
       stock_code,
       stock_name,
       pre_tax_amount,
@@ -124,29 +131,25 @@ router.post('/', async (req: AuthRequest, res) => {
       description,
     } = req.body;
 
-    if (!record_date || !stock_code || !stock_name || !pre_tax_amount || !after_tax_amount) {
+    if (!record_date || !stock_code || !stock_name || !pre_tax_amount || !after_tax_amount || !income_type) {
       return res.status(400).json({
         success: false,
-        message: '請填寫所有必填欄位',
+        message: '請填寫所有必填欄位（收益類型不能為空）',
       });
     }
 
-    const db = getDatabase();
-    const insertDividend = (sql: string, params: any[]) =>
-      new Promise<number>((resolve, reject) => {
-        db.run(sql, params, function (err) {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(this.lastID);
-          }
-        });
+    if (income_type === '全部') {
+      return res.status(400).json({
+        success: false,
+        message: '收益類型不能選擇「全部」，請選擇具體的收益類型',
       });
+    }
 
-    const newDividendId = await insertDividend(
+    const result = await run(
       'INSERT INTO dividends (user_id, record_date, income_type, stock_code, stock_name, pre_tax_amount, tax_amount, after_tax_amount, dividend_per_share, share_count, source, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [req.userId, record_date, income_type, stock_code, stock_name, pre_tax_amount, tax_amount, after_tax_amount, dividend_per_share || null, share_count || null, source || null, description || null]
     );
+    const newDividendId = result.lastID;
 
     res.status(201).json({
       success: true,
@@ -181,11 +184,14 @@ router.put('/:id', async (req: AuthRequest, res) => {
       description,
     } = req.body;
 
-    const db = getDatabase();
-    const get = promisify(db.get.bind(db));
-    const run = promisify(db.run.bind(db));
+    if (!income_type || income_type === '全部') {
+      return res.status(400).json({
+        success: false,
+        message: '收益類型不能選擇「全部」，請選擇具體的收益類型',
+      });
+    }
 
-    const dividend: any = await get(
+    const dividend: any = await get<any>(
       'SELECT * FROM dividends WHERE id = ? AND user_id = ?',
       [id, req.userId]
     );
@@ -218,11 +224,7 @@ router.put('/:id', async (req: AuthRequest, res) => {
 router.delete('/:id', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
-    const db = getDatabase();
-    const get = promisify(db.get.bind(db));
-    const run = promisify(db.run.bind(db));
-
-    const dividend: any = await get(
+    const dividend: any = await get<any>(
       'SELECT * FROM dividends WHERE id = ? AND user_id = ?',
       [id, req.userId]
     );

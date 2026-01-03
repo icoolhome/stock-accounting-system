@@ -78,7 +78,7 @@ const Transactions = () => {
   const [sortField, setSortField] = useState<string>('trade_date');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [dragging, setDragging] = useState(false);
-  const [modalPosition, setModalPosition] = useState({ x: 0, y: 0 });
+  const [modalPosition, setModalPosition] = useState<{ x: number | null; y: number | null }>({ x: null, y: null });
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
   const [stockSearchResults, setStockSearchResults] = useState<
@@ -417,6 +417,8 @@ const Transactions = () => {
       currency: transaction.currency,
       buy_reason: transaction.buy_reason || '',
     });
+    // 重置模態框位置到中間
+    setModalPosition({ x: null, y: null });
     setShowModal(true);
   };
 
@@ -469,18 +471,34 @@ const Transactions = () => {
     if ((e.target as HTMLElement).closest('input, select, textarea, button')) {
       return;
     }
+    const modalElement = e.currentTarget as HTMLElement;
+    const rect = modalElement.getBoundingClientRect();
+    
+    // 如果當前是居中狀態，先計算實際位置
+    let currentX = modalPosition.x;
+    let currentY = modalPosition.y;
+    
+    if (currentX === null || currentY === null) {
+      // 居中狀態，計算實際像素位置
+      currentX = rect.left;
+      currentY = rect.top;
+      setModalPosition({ x: currentX, y: currentY });
+    }
+    
     setDragging(true);
     setDragStart({
-      x: e.clientX - modalPosition.x,
-      y: e.clientY - modalPosition.y,
+      x: e.clientX - currentX,
+      y: e.clientY - currentY,
     });
   };
 
   const handleModalMouseMove = (e: React.MouseEvent) => {
     if (dragging) {
+      const newX = e.clientX - dragStart.x;
+      const newY = e.clientY - dragStart.y;
       setModalPosition({
-        x: e.clientX - dragStart.x,
-        y: e.clientY - dragStart.y,
+        x: newX,
+        y: newY,
       });
     }
   };
@@ -716,6 +734,8 @@ const Transactions = () => {
             <button
               onClick={() => {
                 resetForm();
+                // 重置模態框位置到中間
+                setModalPosition({ x: null, y: null });
                 setShowModal(true);
               }}
               className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium"
@@ -1258,9 +1278,12 @@ const Transactions = () => {
             <div
               className="relative mx-auto p-5 border w-full max-w-3xl shadow-lg rounded-md bg-white"
               style={{
-                marginTop: `${Math.max(20, modalPosition.y)}px`,
-                marginLeft: `${modalPosition.x}px`,
-                transform: 'translateX(-50%)',
+                position: 'fixed',
+                top: modalPosition.y === null ? '50%' : `${modalPosition.y}px`,
+                left: modalPosition.x === null ? '50%' : `${modalPosition.x}px`,
+                transform: modalPosition.y === null ? 'translate(-50%, -50%)' : 'none',
+                maxHeight: '90vh',
+                overflowY: 'auto',
               }}
               onMouseDown={handleModalMouseDown}
             >

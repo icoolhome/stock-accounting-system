@@ -120,6 +120,13 @@ const WelcomeGuide = () => {
                 >
                   前往交割管理 →
                 </button>
+                <div className="mt-4 flex justify-center">
+                  <img 
+                    src="/qrcode.png" 
+                    alt="讚賞碼" 
+                    className="max-w-xs w-full h-auto"
+                  />
+                </div>
               </div>
             </div>
 
@@ -159,6 +166,8 @@ const WelcomeGuide = () => {
 };
 
 export default WelcomeGuide;
+
+
 
 
 

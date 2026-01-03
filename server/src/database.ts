@@ -19,12 +19,61 @@ export const getDatabase = (): sqlite3.Database => {
   return db;
 };
 
+// 導出統一的數據庫操作函數（在 initDatabase 之前定義，以便在遷移代碼中使用）
+export const run = (sql: string, params: any[] = []): Promise<{ lastID: number; changes: number }> => {
+  const database = getDatabase();
+  return new Promise((resolve, reject) => {
+    database.run(sql, params, function (err) {
+      if (err) {
+        reject(err);
+      } else {
+        resolve({ lastID: this.lastID || 0, changes: this.changes || 0 });
+      }
+    });
+  });
+};
+
+export const get = <T = any>(sql: string, params: any[] = []): Promise<T | undefined> => {
+  const database = getDatabase();
+  return new Promise((resolve, reject) => {
+    database.get(sql, params, (err, row) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(row as T | undefined);
+      }
+    });
+  });
+};
+
+export const all = <T = any>(sql: string, params: any[] = []): Promise<T[]> => {
+  const database = getDatabase();
+  return new Promise((resolve, reject) => {
+    database.all(sql, params, (err, rows) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve((rows || []) as T[]);
+      }
+    });
+  });
+};
+
 export const initDatabase = async (): Promise<void> => {
   const database = getDatabase();
-  const run = promisify(database.run.bind(database));
+  
+  // 本地 run 函數用於無參數的 SQL 語句
+  const runNoParams = (sql: string): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      database.run(sql, (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+  };
 
   // 用戶表
-  await run(`
+  await runNoParams(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       email TEXT UNIQUE NOT NULL,
@@ -38,7 +87,7 @@ export const initDatabase = async (): Promise<void> => {
   `);
 
   // 證券帳戶表
-  await run(`
+  await runNoParams(`
     CREATE TABLE IF NOT EXISTS securities_accounts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
@@ -52,7 +101,7 @@ export const initDatabase = async (): Promise<void> => {
   `);
 
   // 交易記錄表
-  await run(`
+  await runNoParams(`
     CREATE TABLE IF NOT EXISTS transactions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
@@ -87,7 +136,7 @@ export const initDatabase = async (): Promise<void> => {
   `);
 
   // 銀行帳戶表
-  await run(`
+  await runNoParams(`
     CREATE TABLE IF NOT EXISTS bank_accounts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
@@ -105,7 +154,7 @@ export const initDatabase = async (): Promise<void> => {
   `);
 
   // 庫存表
-  await run(`
+  await runNoParams(`
     CREATE TABLE IF NOT EXISTS holdings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
@@ -127,7 +176,7 @@ export const initDatabase = async (): Promise<void> => {
   `);
 
   // 交割管理表
-  await run(`
+  await runNoParams(`
     CREATE TABLE IF NOT EXISTS settlements (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
@@ -147,7 +196,7 @@ export const initDatabase = async (): Promise<void> => {
   `);
 
   // 歷史收益表
-  await run(`
+  await runNoParams(`
     CREATE TABLE IF NOT EXISTS dividends (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
@@ -169,7 +218,7 @@ export const initDatabase = async (): Promise<void> => {
   `);
 
   // 股票資料表（用於API更新）
-  await run(`
+  await runNoParams(`
     CREATE TABLE IF NOT EXISTS stock_data (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       stock_code TEXT UNIQUE NOT NULL,
@@ -184,7 +233,7 @@ export const initDatabase = async (): Promise<void> => {
 
   // 為現有數據庫添加 industry 字段（如果不存在）
   try {
-    await run(`ALTER TABLE stock_data ADD COLUMN industry TEXT`);
+    await runNoParams(`ALTER TABLE stock_data ADD COLUMN industry TEXT`);
   } catch (e: any) {
     // 字段已存在，忽略錯誤
     if (!e.message.includes('duplicate column')) {
@@ -193,7 +242,7 @@ export const initDatabase = async (): Promise<void> => {
   }
 
   // 系統設定表
-  await run(`
+  await runNoParams(`
     CREATE TABLE IF NOT EXISTS system_settings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
@@ -207,7 +256,7 @@ export const initDatabase = async (): Promise<void> => {
   `);
 
   // 幣別設定表
-  await run(`
+  await runNoParams(`
     CREATE TABLE IF NOT EXISTS currency_settings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
@@ -222,7 +271,7 @@ export const initDatabase = async (): Promise<void> => {
   `);
 
   // 系統日誌表
-  await run(`
+  await runNoParams(`
     CREATE TABLE IF NOT EXISTS system_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       log_type TEXT NOT NULL,
@@ -233,8 +282,23 @@ export const initDatabase = async (): Promise<void> => {
     )
   `);
 
+  // 收益類型表
+  await runNoParams(`
+    CREATE TABLE IF NOT EXISTS income_types (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      type_name TEXT NOT NULL,
+      is_dividend INTEGER DEFAULT 0,
+      display_order INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      UNIQUE(user_id, type_name)
+    )
+  `);
+
   // 證交所除權除息原始資料表（TWT49U）
-  await run(`
+  await runNoParams(`
     CREATE TABLE IF NOT EXISTS twse_exrights (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       record_date TEXT NOT NULL,
@@ -260,7 +324,7 @@ export const initDatabase = async (): Promise<void> => {
 
   // 遷移現有 users 表：添加 role 和 last_login_at 字段
   try {
-    await run(`ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'`);
+    await runNoParams(`ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'`);
   } catch (e: any) {
     // 如果字段已存在則忽略錯誤
     if (!e.message.includes('duplicate column')) {
@@ -269,7 +333,7 @@ export const initDatabase = async (): Promise<void> => {
   }
 
   try {
-    await run(`ALTER TABLE users ADD COLUMN last_login_at DATETIME`);
+    await runNoParams(`ALTER TABLE users ADD COLUMN last_login_at DATETIME`);
   } catch (e: any) {
     // 如果字段已存在則忽略錯誤
     if (!e.message.includes('duplicate column')) {
@@ -279,7 +343,7 @@ export const initDatabase = async (): Promise<void> => {
 
   // 遷移現有 settlements 表：添加 twd_amount 字段
   try {
-    await run(`ALTER TABLE settlements ADD COLUMN twd_amount REAL`);
+    await runNoParams(`ALTER TABLE settlements ADD COLUMN twd_amount REAL`);
   } catch (e: any) {
     // 如果字段已存在則忽略錯誤
     if (!e.message.includes('duplicate column')) {
@@ -289,7 +353,7 @@ export const initDatabase = async (): Promise<void> => {
 
   // 遷移現有 settlements 表：添加 transaction_ids 字段（用於多選）
   try {
-    await run(`ALTER TABLE settlements ADD COLUMN transaction_ids TEXT`);
+    await runNoParams(`ALTER TABLE settlements ADD COLUMN transaction_ids TEXT`);
   } catch (e: any) {
     // 如果字段已存在則忽略錯誤
     if (!e.message.includes('duplicate column')) {
@@ -299,19 +363,19 @@ export const initDatabase = async (): Promise<void> => {
 
   // 將現有的 transaction_id 遷移到 transaction_ids（只遷移一次）
   try {
-    const all = promisify(database.all.bind(database));
-    const settlements = await all(`SELECT id, transaction_id, transaction_ids FROM settlements 
+    // 使用導出的 all 和 run 函數（在文件末尾定義，但可以在這裡使用）
+    const settlements = await all<any>(`SELECT id, transaction_id, transaction_ids FROM settlements 
                                    WHERE transaction_id IS NOT NULL AND transaction_id != '' 
                                    AND (transaction_ids IS NULL OR transaction_ids = '')`);
     
-    if (settlements && (settlements as any[]).length > 0) {
-      for (const settlement of settlements as any[]) {
+    if (settlements && settlements.length > 0) {
+      for (const settlement of settlements) {
         if (settlement.transaction_id) {
           const transactionIds = JSON.stringify([settlement.transaction_id]);
           await run('UPDATE settlements SET transaction_ids = ? WHERE id = ?', [transactionIds, settlement.id]);
         }
       }
-      console.log(`已遷移 ${(settlements as any[]).length} 筆交割記錄的 transaction_id 到 transaction_ids`);
+      console.log(`已遷移 ${settlements.length} 筆交割記錄的 transaction_id 到 transaction_ids`);
     }
   } catch (e: any) {
     // 遷移失敗不影響正常運行
@@ -319,7 +383,7 @@ export const initDatabase = async (): Promise<void> => {
   }
 
   // 銀行明細表
-  await run(`
+  await runNoParams(`
     CREATE TABLE IF NOT EXISTS bank_transactions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
@@ -338,7 +402,7 @@ export const initDatabase = async (): Promise<void> => {
 
   // 為現有數據庫添加 transaction_category 字段（如果不存在）
   try {
-    await run(`ALTER TABLE bank_transactions ADD COLUMN transaction_category TEXT`);
+    await runNoParams(`ALTER TABLE bank_transactions ADD COLUMN transaction_category TEXT`);
   } catch (e: any) {
     // 字段已存在，忽略錯誤
     if (!e.message.includes('duplicate column')) {

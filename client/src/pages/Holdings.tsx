@@ -833,11 +833,11 @@ const Holdings = () => {
                       };
 
                       // 分頁處理
-                      const totalDetailPages = Math.ceil(sortedDetails.length / detailPageSize);
                       const paginatedDetails = sortedDetails.slice(
                         (currentDetailPage - 1) * detailPageSize,
                         currentDetailPage * detailPageSize
                       );
+                      // const totalDetailPages = Math.ceil(sortedDetails.length / detailPageSize); // 保留備用
 
                       return (
                         <>

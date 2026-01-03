@@ -1,7 +1,6 @@
 import express from 'express';
-import { getDatabase } from '../database';
+import { all, get, run } from '../database';
 import { authenticate, AuthRequest } from '../middleware/auth';
-import { promisify } from 'util';
 
 const router = express.Router();
 
@@ -135,7 +134,7 @@ const fetchStockPrice = async (stockCode: string, marketType: string): Promise<n
       return null;
     }
 
-    const data: any[] = await response.json();
+    const data = (await response.json()) as any[];
     const stock = data.find((item: any) => {
       const code = item.Code || item.code || item.股票代號;
       return code === stockCode || code === stockCode.padStart(6, '0');
@@ -223,8 +222,6 @@ const fetchStockPricesBatch = async (
 router.get('/', async (req: AuthRequest, res) => {
   try {
     const { securitiesAccountId, stockCode } = req.query;
-    const db = getDatabase();
-    const all = promisify(db.all.bind(db));
 
     // 獲取所有交易記錄
     let query = `SELECT t.*, sa.account_name, sa.broker_name, sd.market_type, sd.etf_type, sd.industry
@@ -245,7 +242,7 @@ router.get('/', async (req: AuthRequest, res) => {
 
     query += ' ORDER BY t.trade_date ASC, t.created_at ASC';
 
-    const transactions: any[] = await all(query, params);
+    const transactions = await all<any>(query, params);
 
     // 獲取手續費設定
     let feeSettings: any = {
@@ -258,7 +255,7 @@ router.get('/', async (req: AuthRequest, res) => {
     };
     
     try {
-      const settings = await all(
+      const settings = await all<any>(
         'SELECT setting_key, setting_value FROM system_settings WHERE user_id = ? AND setting_key = ?',
         [req.userId, 'feeSettings']
       );
@@ -800,8 +797,6 @@ router.get('/', async (req: AuthRequest, res) => {
 router.get('/details', async (req: AuthRequest, res) => {
   try {
     const { securitiesAccountId, stockCode } = req.query;
-    const db = getDatabase();
-    const all = promisify(db.all.bind(db));
 
     // 只獲取國內（TWD）的買入交易記錄（未完全賣出的）
     let query = `SELECT t.*, sa.account_name, sa.broker_name
@@ -823,7 +818,7 @@ router.get('/details', async (req: AuthRequest, res) => {
 
     query += ' ORDER BY t.trade_date DESC, t.created_at DESC';
 
-    const transactions: any[] = await all(query, params);
+    const transactions = await all<any>(query, params);
 
     // 預設費率
     const FEE_RATE = 0.001425;

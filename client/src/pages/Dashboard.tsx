@@ -60,8 +60,14 @@ const Dashboard = () => {
         setHoldingsStats(holdingsResponse.data.stats);
       }
 
-      // 獲取歷史收益統計
-      const dividendsResponse = await axios.get('/api/dividends');
+      // 獲取歷史收益統計（本年度）
+      const currentYear = new Date().getFullYear();
+      const startDate = `${currentYear}-01-01`;
+      const dividendsResponse = await axios.get('/api/dividends', {
+        params: {
+          startDate: startDate,
+        },
+      });
       if (dividendsResponse.data.stats) {
         setDividendStats({
           totalAfterTax: dividendsResponse.data.stats.totalAfterTax || 0,

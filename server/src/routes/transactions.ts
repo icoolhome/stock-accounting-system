@@ -1,7 +1,6 @@
 import express from 'express';
-import { getDatabase } from '../database';
+import { all, get, run } from '../database';
 import { authenticate, AuthRequest } from '../middleware/auth';
-import { promisify } from 'util';
 
 const router = express.Router();
 
@@ -12,9 +11,6 @@ router.use(authenticate);
 router.get('/', async (req: AuthRequest, res) => {
   try {
     const { startDate, endDate, stockCode, accountId } = req.query;
-    const db = getDatabase();
-    const all = promisify(db.all.bind(db));
-
     let query = 'SELECT t.*, sa.account_name, sa.broker_name FROM transactions t LEFT JOIN securities_accounts sa ON t.securities_account_id = sa.id WHERE t.user_id = ?';
     const params: any[] = [req.userId];
 
@@ -40,7 +36,7 @@ router.get('/', async (req: AuthRequest, res) => {
 
     query += ' ORDER BY t.trade_date DESC, t.created_at DESC';
 
-    const transactions = await all(query, params);
+    const transactions = await all<any>(query, params);
 
     res.json({
       success: true,
@@ -58,10 +54,7 @@ router.get('/', async (req: AuthRequest, res) => {
 router.get('/:id', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
-    const db = getDatabase();
-    const get = promisify(db.get.bind(db));
-
-    const transaction: any = await get(
+    const transaction: any = await get<any>(
       'SELECT t.*, sa.account_name, sa.broker_name FROM transactions t LEFT JOIN securities_accounts sa ON t.securities_account_id = sa.id WHERE t.id = ? AND t.user_id = ?',
       [id, req.userId]
     );
@@ -122,19 +115,7 @@ router.post('/', async (req: AuthRequest, res) => {
       settlement_date = tradeDate.toISOString().split('T')[0];
     }
 
-    const db = getDatabase();
-    const insertTransaction = (sql: string, params: any[]) =>
-      new Promise<number>((resolve, reject) => {
-        db.run(sql, params, function (err) {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(this.lastID);
-          }
-        });
-      });
-
-    const newTransactionId = await insertTransaction(
+    const result = await run(
       `INSERT INTO transactions (
         user_id, securities_account_id, trade_date, settlement_date,
         transaction_type, stock_code, stock_name, quantity, price,
@@ -169,6 +150,7 @@ router.post('/', async (req: AuthRequest, res) => {
         buy_reason,
       ]
     );
+    const newTransactionId = result.lastID;
 
     res.status(201).json({
       success: true,
@@ -215,12 +197,8 @@ router.put('/:id', async (req: AuthRequest, res) => {
       buy_reason,
     } = req.body;
 
-    const db = getDatabase();
-    const get = promisify(db.get.bind(db));
-    const run = promisify(db.run.bind(db));
-
     // 檢查記錄是否存在且屬於當前用戶
-    const transaction: any = await get(
+    const transaction: any = await get<any>(
       'SELECT * FROM transactions WHERE id = ? AND user_id = ?',
       [id, req.userId]
     );
@@ -294,12 +272,8 @@ router.put('/:id', async (req: AuthRequest, res) => {
 router.delete('/:id', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
-    const db = getDatabase();
-    const get = promisify(db.get.bind(db));
-    const run = promisify(db.run.bind(db));
-
     // 檢查記錄是否存在且屬於當前用戶
-    const transaction: any = await get(
+    const transaction: any = await get<any>(
       'SELECT * FROM transactions WHERE id = ? AND user_id = ?',
       [id, req.userId]
     );

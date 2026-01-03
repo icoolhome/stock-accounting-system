@@ -1,8 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import iconv from 'iconv-lite';
-import { getDatabase } from '../database';
-import { promisify } from 'util';
+import { getDatabase, run, get } from '../database';
 
 const TWSE_BASE_URL = 'https://www.twse.com.tw/';
 
@@ -29,11 +28,9 @@ function toNumber(value: string | null | undefined): number | null {
 }
 
 async function getLatestRecordDate(): Promise<string | null> {
-  const db = getDatabase();
-  const get = promisify(db.get.bind(db));
-  const row = (await get(
+  const row = await get<{ latest?: string }>(
     'SELECT MAX(record_date) AS latest FROM twse_exrights'
-  )) as { latest?: string } | undefined;
+  );
   return row?.latest || null;
 }
 
@@ -150,10 +147,7 @@ async function saveRowsToDatabase(rows: CsvRow[]): Promise<void> {
     return;
   }
 
-  const db = getDatabase();
-  const run = promisify(db.run.bind(db));
-
-  await run('BEGIN TRANSACTION');
+  await run('BEGIN TRANSACTION', []);
   try {
     for (const row of rows) {
       const codeRaw = row['股票代號'];
@@ -224,10 +218,10 @@ async function saveRowsToDatabase(rows: CsvRow[]): Promise<void> {
         params
       );
     }
-    await run('COMMIT');
+    await run('COMMIT', []);
     console.log('[TWT49U] 匯入完成，共處理筆數:', rows.length);
   } catch (e) {
-    await run('ROLLBACK');
+    await run('ROLLBACK', []);
     console.error('[TWT49U] 匯入失敗，已回滾:', (e as Error).message);
     throw e;
   }

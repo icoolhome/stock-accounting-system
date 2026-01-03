@@ -1,9 +1,9 @@
-# 推送到 GitHub - vS0001-2
+# 推送到 GitHub - vS0002
 
 ## 當前狀態
 ✅ Git 倉庫已初始化
 ✅ 代碼已提交（commit: 45cdba1）
-✅ 版本標籤已創建（vS0001-2）
+✅ 版本標籤已創建（vS0002）
 ⚠️ 尚未配置遠程倉庫
 
 ## 推送到 GitHub 的步驟
@@ -26,7 +26,7 @@ git remote add origin https://github.com/YOUR_USERNAME/REPO_NAME.git
 git push -u origin master
 
 # 推送版本標籤
-git push origin vS0001-2
+git push origin vS0002
 ```
 
 ### 完整命令示例
@@ -37,7 +37,7 @@ git push origin vS0001-2
 cd f:\stock-ai\stock-accounting-system
 git remote add origin https://github.com/username/stock-accounting-system.git
 git push -u origin master
-git push origin vS0001-2
+git push origin vS0002
 ```
 
 ## 如果還沒有 GitHub 倉庫
@@ -51,8 +51,10 @@ git push origin vS0001-2
 
 推送成功後，您可以：
 - 在 GitHub 上查看代碼
-- 在 Releases 頁面查看版本標籤 vS0001-2
+- 在 Releases 頁面查看版本標籤 vS0002
 - 查看提交歷史和更新說明
+
+
 
 
 

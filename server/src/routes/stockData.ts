@@ -1,7 +1,6 @@
 import express from 'express';
-import { getDatabase } from '../database';
+import { getDatabase, all, run, get } from '../database';
 import { authenticate, AuthRequest } from '../middleware/auth';
-import { promisify } from 'util';
 
 const router = express.Router();
 
@@ -11,10 +10,7 @@ router.use(authenticate);
 // 獲取所有股票資料
 router.get('/', async (req: AuthRequest, res) => {
   try {
-    const db = getDatabase();
-    const all = promisify(db.all.bind(db));
-
-    const rows = await all(
+    const rows = await all<any>(
       `
       SELECT stock_code, stock_name, market_type, etf_type, industry
       FROM stock_data
@@ -45,9 +41,6 @@ router.put('/', async (req: AuthRequest, res) => {
         message: '股票代碼和股票名稱為必填項',
       });
     }
-
-    const db = getDatabase();
-    const run = promisify(db.run.bind(db));
 
     await run(
       `
@@ -87,11 +80,8 @@ router.get('/search', async (req: AuthRequest, res) => {
       });
     }
 
-    const db = getDatabase();
-    const all = promisify(db.all.bind(db));
-
     const like = `%${keyword.trim()}%`;
-    const rows = await all(
+    const rows = await all<any>(
       `
       SELECT stock_code, stock_name, market_type, etf_type
       FROM stock_data
@@ -118,12 +108,9 @@ router.get('/search', async (req: AuthRequest, res) => {
 router.get('/:code/detail', async (req: AuthRequest, res) => {
   try {
     const { code } = req.params;
-    const db = getDatabase();
-    const get = promisify(db.get.bind(db));
-    const all = promisify(db.all.bind(db));
 
     // 獲取股票基本資料
-    const stockInfo: any = await get(
+    const stockInfo: any = await get<any>(
       'SELECT stock_code, stock_name, market_type, etf_type, industry FROM stock_data WHERE stock_code = ?',
       [code]
     );
@@ -145,7 +132,7 @@ router.get('/:code/detail', async (req: AuthRequest, res) => {
       });
 
       if (priceResponse.ok) {
-        const priceData: any[] = await priceResponse.json();
+        const priceData = (await priceResponse.json()) as any[];
         const stock = priceData.find((item: any) => {
           const stockCode = item.Code || item.code || item.股票代號;
           return stockCode === code || stockCode === code.padStart(6, '0');
@@ -168,7 +155,7 @@ router.get('/:code/detail', async (req: AuthRequest, res) => {
     }
 
     // 獲取該股票的配息記錄（從用戶的歷史收益中查詢）
-    const dividends = await all(
+    const dividends = await all<any>(
       `
       SELECT record_date, income_type, pre_tax_amount, tax_amount, after_tax_amount, 
              dividend_per_share, share_count

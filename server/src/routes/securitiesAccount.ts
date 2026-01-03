@@ -1,7 +1,6 @@
 import express from 'express';
-import { getDatabase } from '../database';
+import { all, get, run } from '../database';
 import { authenticate, AuthRequest } from '../middleware/auth';
-import { promisify } from 'util';
 
 const router = express.Router();
 
@@ -11,10 +10,7 @@ router.use(authenticate);
 // 獲取所有證券帳戶
 router.get('/', async (req: AuthRequest, res) => {
   try {
-    const db = getDatabase();
-    const all = promisify(db.all.bind(db));
-
-    const accounts = await all(
+    const accounts = await all<any>(
       'SELECT * FROM securities_accounts WHERE user_id = ? ORDER BY created_at DESC',
       [req.userId]
     );
@@ -35,10 +31,7 @@ router.get('/', async (req: AuthRequest, res) => {
 router.get('/:id', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
-    const db = getDatabase();
-    const get = promisify(db.get.bind(db));
-
-    const account: any = await get(
+    const account: any = await get<any>(
       'SELECT * FROM securities_accounts WHERE id = ? AND user_id = ?',
       [id, req.userId]
     );
@@ -74,22 +67,11 @@ router.post('/', async (req: AuthRequest, res) => {
       });
     }
 
-    const db = getDatabase();
-    const insertAccount = (sql: string, params: any[]) =>
-      new Promise<number>((resolve, reject) => {
-        db.run(sql, params, function (err) {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(this.lastID);
-          }
-        });
-      });
-
-    const newAccountId = await insertAccount(
+    const result = await run(
       'INSERT INTO securities_accounts (user_id, account_name, broker_name, account_number) VALUES (?, ?, ?, ?)',
       [req.userId, account_name, broker_name, account_number]
     );
+    const newAccountId = result.lastID;
 
     res.status(201).json({
       success: true,
@@ -123,12 +105,8 @@ router.put('/:id', async (req: AuthRequest, res) => {
       });
     }
 
-    const db = getDatabase();
-    const get = promisify(db.get.bind(db));
-    const run = promisify(db.run.bind(db));
-
     // 檢查帳戶是否存在且屬於當前用戶
-    const account: any = await get(
+    const account: any = await get<any>(
       'SELECT * FROM securities_accounts WHERE id = ? AND user_id = ?',
       [id, req.userId]
     );
@@ -161,12 +139,8 @@ router.put('/:id', async (req: AuthRequest, res) => {
 router.delete('/:id', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
-    const db = getDatabase();
-    const get = promisify(db.get.bind(db));
-    const run = promisify(db.run.bind(db));
-
     // 檢查帳戶是否存在且屬於當前用戶
-    const account: any = await get(
+    const account: any = await get<any>(
       'SELECT * FROM securities_accounts WHERE id = ? AND user_id = ?',
       [id, req.userId]
     );

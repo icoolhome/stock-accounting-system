@@ -1,7 +1,6 @@
 import express from 'express';
-import { getDatabase } from '../database';
+import { all, get, run } from '../database';
 import { authenticate, AuthRequest } from '../middleware/auth';
-import { promisify } from 'util';
 import https from 'https';
 import zlib from 'zlib';
 
@@ -9,13 +8,17 @@ const router = express.Router();
 
 router.use(authenticate);
 
+// 輔助函數：根據股票名稱和代碼分類行業（簡化版，返回 null 表示未分類）
+const getIndustryCategory = (name: string, code: string): string | null => {
+  // 這裡可以根據需要實現行業分類邏輯
+  // 目前返回 null，表示未分類
+  return null;
+};
+
 // 獲取系統設定
 router.get('/', async (req: AuthRequest, res) => {
   try {
-    const db = getDatabase();
-    const all = promisify(db.all.bind(db));
-
-    const settings = await all(
+    const settings = await all<any>(
       'SELECT setting_key, setting_value FROM system_settings WHERE user_id = ?',
       [req.userId]
     );
@@ -53,9 +56,6 @@ router.put('/', async (req: AuthRequest, res) => {
       });
     }
 
-    const db = getDatabase();
-    const run = promisify(db.run.bind(db));
-
     for (const [key, value] of Object.entries(settings)) {
       const valueStr = typeof value === 'object' ? JSON.stringify(value) : String(value);
       
@@ -81,10 +81,7 @@ router.put('/', async (req: AuthRequest, res) => {
 // 獲取幣別設定
 router.get('/currencies', async (req: AuthRequest, res) => {
   try {
-    const db = getDatabase();
-    const all = promisify(db.all.bind(db));
-
-    const currencies = await all(
+    const currencies = await all<any>(
       'SELECT * FROM currency_settings WHERE user_id = ? ORDER BY is_default DESC, currency_code ASC',
       [req.userId]
     );
@@ -113,10 +110,6 @@ router.post('/currencies', async (req: AuthRequest, res) => {
       });
     }
 
-    const db = getDatabase();
-    const get = promisify(db.get.bind(db));
-    const run = promisify(db.run.bind(db));
-
     // 如果設為預設，先取消其他幣別的預設狀態
     if (is_default) {
       await run(
@@ -126,7 +119,7 @@ router.post('/currencies', async (req: AuthRequest, res) => {
     }
 
     // 檢查是否已存在
-    const existing: any = await get(
+    const existing: any = await get<any>(
       'SELECT * FROM currency_settings WHERE user_id = ? AND currency_code = ?',
       [req.userId, currency_code]
     );
@@ -159,9 +152,6 @@ router.post('/currencies', async (req: AuthRequest, res) => {
 router.delete('/currencies/:code', async (req: AuthRequest, res) => {
   try {
     const { code } = req.params;
-    const db = getDatabase();
-    const run = promisify(db.run.bind(db));
-
     await run(
       'DELETE FROM currency_settings WHERE user_id = ? AND currency_code = ?',
       [req.userId, code]
@@ -182,9 +172,6 @@ router.delete('/currencies/:code', async (req: AuthRequest, res) => {
 // 測試資料庫連接
 router.get('/test-connection', async (req: AuthRequest, res) => {
   try {
-    const db = getDatabase();
-    const get = promisify(db.get.bind(db));
-
     await get('SELECT 1');
 
     res.json({
@@ -201,8 +188,6 @@ router.get('/test-connection', async (req: AuthRequest, res) => {
 
 // 更新股票資料（從台灣證券交易所 Open API 抓取）
 router.post('/update-stock-data', async (req: AuthRequest, res) => {
-  const db = getDatabase();
-  const run = promisify(db.run.bind(db));
   let listedCount = 0;
   let etfCount = 0;
   let otcCount = 0;
@@ -231,7 +216,7 @@ router.post('/update-stock-data', async (req: AuthRequest, res) => {
 
     let data: any[];
     try {
-      data = await response.json();
+      data = (await response.json()) as any[];
     } catch (jsonError: any) {
       return res.status(500).json({
         success: false,
@@ -406,9 +391,9 @@ router.post('/update-stock-data', async (req: AuthRequest, res) => {
 
           // 處理 gzip 壓縮
           if (res.headers['content-encoding'] === 'gzip') {
-            stream = res.pipe(zlib.createGunzip());
+            stream = res.pipe(zlib.createGunzip()) as any;
           } else if (res.headers['content-encoding'] === 'deflate') {
-            stream = res.pipe(zlib.createInflate());
+            stream = res.pipe(zlib.createInflate()) as any;
           }
 
           stream.on('data', (chunk: Buffer) => {
@@ -616,9 +601,9 @@ router.post('/update-stock-data', async (req: AuthRequest, res) => {
 
           // 處理 gzip 壓縮
           if (res.headers['content-encoding'] === 'gzip') {
-            stream = res.pipe(zlib.createGunzip());
+            stream = res.pipe(zlib.createGunzip()) as any;
           } else if (res.headers['content-encoding'] === 'deflate') {
-            stream = res.pipe(zlib.createInflate());
+            stream = res.pipe(zlib.createInflate()) as any;
           }
 
           stream.on('data', (chunk: Buffer) => {
@@ -801,15 +786,12 @@ router.post('/update-stock-data', async (req: AuthRequest, res) => {
 // 股票資料統計
 router.get('/stock-stats', async (req: AuthRequest, res) => {
   try {
-    const db = getDatabase();
-    const get = promisify(db.get.bind(db));
-
-    const listed = await get('SELECT COUNT(*) as count FROM stock_data WHERE market_type = ?', ['上市']);
-    const otc = await get('SELECT COUNT(*) as count FROM stock_data WHERE market_type = ?', ['上櫃']);
-    const emerging = await get('SELECT COUNT(*) as count FROM stock_data WHERE market_type = ?', ['興櫃']);
-    const etf = await get('SELECT COUNT(*) as count FROM stock_data WHERE etf_type IS NOT NULL');
-    const activeEtf = await get('SELECT COUNT(*) as count FROM stock_data WHERE etf_type = ?', ['主動式ETF']);
-    const passiveEtf = await get('SELECT COUNT(*) as count FROM stock_data WHERE etf_type = ?', ['被動式ETF']);
+    const listed = await get<any>('SELECT COUNT(*) as count FROM stock_data WHERE market_type = ?', ['上市']);
+    const otc = await get<any>('SELECT COUNT(*) as count FROM stock_data WHERE market_type = ?', ['上櫃']);
+    const emerging = await get<any>('SELECT COUNT(*) as count FROM stock_data WHERE market_type = ?', ['興櫃']);
+    const etf = await get<any>('SELECT COUNT(*) as count FROM stock_data WHERE etf_type IS NOT NULL', []);
+    const activeEtf = await get<any>('SELECT COUNT(*) as count FROM stock_data WHERE etf_type = ?', ['主動式ETF']);
+    const passiveEtf = await get<any>('SELECT COUNT(*) as count FROM stock_data WHERE etf_type = ?', ['被動式ETF']);
 
     res.json({
       success: true,
@@ -845,9 +827,6 @@ router.put('/password', async (req: AuthRequest, res) => {
     const bcrypt = require('bcryptjs');
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    const db = getDatabase();
-    const run = promisify(db.run.bind(db));
-
     await run(
       'UPDATE users SET password = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
       [hashedPassword, req.userId]
@@ -877,12 +856,8 @@ router.put('/email', async (req: AuthRequest, res) => {
       });
     }
 
-    const db = getDatabase();
-    const get = promisify(db.get.bind(db));
-    const run = promisify(db.run.bind(db));
-
     // 檢查郵箱是否已被使用
-    const existing: any = await get('SELECT * FROM users WHERE email = ? AND id != ?', [newEmail, req.userId]);
+    const existing: any = await get<any>('SELECT * FROM users WHERE email = ? AND id != ?', [newEmail, req.userId]);
     if (existing) {
       return res.status(400).json({
         success: false,

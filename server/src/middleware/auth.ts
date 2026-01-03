@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { getDatabase } from '../database';
-import { promisify } from 'util';
+import { get } from '../database';
 
 export interface AuthRequest extends Request {
   userId?: number;
@@ -31,9 +30,7 @@ export const authenticate = async (
     req.userId = decoded.userId;
 
     // 獲取用戶角色
-    const db = getDatabase();
-    const get = promisify(db.get.bind(db));
-    const user: any = await get('SELECT role FROM users WHERE id = ?', [decoded.userId]);
+    const user: any = await get<{ role: string }>('SELECT role FROM users WHERE id = ?', [decoded.userId]);
     if (user) {
       req.userRole = user.role || 'user';
     }

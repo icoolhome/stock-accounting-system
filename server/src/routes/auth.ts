@@ -1,8 +1,7 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { getDatabase } from '../database';
-import { promisify } from 'util';
+import { get, run } from '../database';
 
 const router = express.Router();
 
@@ -25,22 +24,8 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    const db = getDatabase();
-    const get = promisify(db.get.bind(db));
-
-    const insertUser = (sql: string, params: any[]) =>
-      new Promise<number>((resolve, reject) => {
-        db.run(sql, params, function (err) {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(this.lastID);
-          }
-        });
-      });
-
     // 檢查用戶是否已存在
-    const existingUser = await get('SELECT * FROM users WHERE email = ?', [email]);
+    const existingUser = await get<any>('SELECT * FROM users WHERE email = ?', [email]);
     if (existingUser) {
       return res.status(400).json({
         success: false,
@@ -52,10 +37,11 @@ router.post('/register', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // 創建用戶
-    const newUserId = await insertUser(
+    const result = await run(
       'INSERT INTO users (email, password, username) VALUES (?, ?, ?)',
       [email, hashedPassword, username || email]
     );
+    const newUserId = result.lastID;
 
     const token = jwt.sign(
       { userId: newUserId },
@@ -94,11 +80,8 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    const db = getDatabase();
-    const get = promisify(db.get.bind(db));
-
     // 查找用戶
-    const user: any = await get('SELECT * FROM users WHERE email = ?', [email]);
+    const user: any = await get<any>('SELECT * FROM users WHERE email = ?', [email]);
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -116,14 +99,7 @@ router.post('/login', async (req, res) => {
     }
 
     // 更新最後登入時間
-    const updateLoginTime = (sql: string, params: any[]) =>
-      new Promise<void>((resolve, reject) => {
-        db.run(sql, params, (err) => {
-          if (err) reject(err);
-          else resolve();
-        });
-      });
-    await updateLoginTime('UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?', [user.id]);
+    await run('UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?', [user.id]);
 
     const token = jwt.sign(
       { userId: user.id },

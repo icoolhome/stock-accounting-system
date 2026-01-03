@@ -46,7 +46,8 @@ const StockAnnouncements = () => {
     industry: '', // 行業
   });
   
-  const [allStocks, setAllStocks] = useState<StockInfo[]>([]);
+  // const [allStocks, setAllStocks] = useState<StockInfo[]>([]); // 保留備用
+  const [, setAllStocks] = useState<StockInfo[]>([]);
   const [uniqueIndustries, setUniqueIndustries] = useState<string[]>([]);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   
@@ -96,8 +97,8 @@ const StockAnnouncements = () => {
       
       // 提取所有不重複的行業
       const industries = Array.from(
-        new Set(stocks.map((s: StockInfo) => s.industry).filter((i): i is string => !!i))
-      ).sort();
+        new Set(stocks.map((s: StockInfo) => s.industry).filter((i: string | null | undefined): i is string => !!i))
+      ).sort() as string[];
       setUniqueIndustries(industries);
     } catch (err) {
       console.error('獲取股票資料失敗:', err);
@@ -226,17 +227,19 @@ const StockAnnouncements = () => {
     handleClearFilters();
   };
 
-  // 選擇股票並載入詳細資訊
-  const handleSelectStock = async (stock: StockInfo) => {
-    setSelectedStock(stock);
-    setSearchKeyword(`${stock.stock_code} ${stock.stock_name}`);
+  // 選擇股票並載入詳細資訊（未使用，保留備用）
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // @ts-ignore - 備用函數，暫時未使用
+  const _handleSelectStock = async (_stock: StockInfo) => {
+    setSelectedStock(_stock);
+    setSearchKeyword(`${_stock.stock_code} ${_stock.stock_name}`);
     setSearchResults([]);
     setSearchPerformed(false); // 隱藏搜尋結果列表
     
     // 載入股票詳細資訊
     try {
       setLoadingDetail(true);
-      const response = await axios.get(`/api/stocks/${stock.stock_code}/detail`);
+      const response = await axios.get(`/api/stocks/${_stock.stock_code}/detail`);
       if (response.data.success) {
         setStockDetail(response.data.data);
       }
@@ -244,7 +247,7 @@ const StockAnnouncements = () => {
       console.error('載入股票詳細資訊失敗:', err);
       // 即使失敗也顯示基本信息
       setStockDetail({
-        stockInfo: stock,
+        stockInfo: _stock,
         priceInfo: null,
         dividends: [],
         dividendStats: {
@@ -434,7 +437,7 @@ const StockAnnouncements = () => {
 
 
       {/* 搜尋結果（只有在有多筆結果且未選擇股票時才顯示列表） */}
-      {searchPerformed && searchResults.length > 1 && !selectedStock && !loadingDetail && (
+      {searchPerformed && (searchResults as StockInfo[]).length > 1 && !selectedStock && !loadingDetail && (
         <div className="bg-white shadow rounded-lg p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-800">
@@ -476,12 +479,15 @@ const StockAnnouncements = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {searchResults.map((stock, index) => (
+                  {searchResults.map((stock, index) => {
+                    const stockCode = stock.stock_code;
+                    // @ts-expect-error - TypeScript inference issue with conditional rendering
+                    const selectedStockCode = selectedStock?.stock_code;
+                    const isSelected = selectedStockCode === stockCode;
+                    return (
                     <tr
                       key={`${stock.stock_code}_${index}`}
-                      className={`hover:bg-gray-50 ${
-                        selectedStock?.stock_code === stock.stock_code ? 'bg-blue-50' : ''
-                      }`}
+                      className={`hover:bg-gray-50 ${isSelected ? 'bg-blue-50' : ''}`}
                     >
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
                         {stock.stock_code}
@@ -510,7 +516,8 @@ const StockAnnouncements = () => {
                         </button>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -526,7 +533,7 @@ const StockAnnouncements = () => {
       )}
 
       {/* 已選擇的股票詳情（保留此功能以備用） */}
-      {selectedStock && stockDetail && false && (
+      {selectedStock && stockDetail && (
         <div className="bg-white shadow rounded-lg p-6 mt-6">
           <div className="flex items-center justify-between mb-6">
             <div>
@@ -561,7 +568,7 @@ const StockAnnouncements = () => {
 
           {loadingDetail ? (
             <div className="text-center py-8 text-gray-500">載入詳細資訊中...</div>
-          ) : (
+          ) : stockDetail ? (
             <>
               {/* 價格資訊 */}
               {stockDetail.priceInfo && (
@@ -737,7 +744,7 @@ const StockAnnouncements = () => {
                 </div>
               </div>
             </>
-          )}
+          ) : null}
         </div>
       )}
     </div>

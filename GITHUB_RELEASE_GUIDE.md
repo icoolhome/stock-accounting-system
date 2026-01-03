@@ -20,8 +20,8 @@
 2. 點擊右側的 **"Releases"** 鏈接，或直接訪問：`https://github.com/YOUR_USERNAME/YOUR_REPO/releases`
 3. 點擊 **"Draft a new release"** 或 **"Create a new release"**
 4. 填寫 Release 信息：
-   - **Tag version**: 輸入標籤名稱，例如 `vS0001-2`
-   - **Release title**: 輸入標題，例如 `vS0001-2 - 系統設定檔案管理功能`
+   - **Tag version**: 輸入標籤名稱，例如 `vS0002`
+   - **Release title**: 輸入標題，例如 `vS0002 - 歷史收益增強與系統診斷改進`
    - **Description**: 複製 `RELEASE_NOTES.md` 的內容到這裡，或者直接寫入更新說明
 5. 可選：附加文件（見步驟 3）
 6. 點擊 **"Publish release"**
@@ -30,8 +30,8 @@
 
 ```bash
 # 使用 GitHub CLI 創建 Release
-gh release create vS0001-2 \
-  --title "vS0001-2 - 系統設定檔案管理功能" \
+gh release create vS0002 \
+  --title "vS0002 - 歷史收益增強與系統診斷改進" \
   --notes-file RELEASE_NOTES.md \
   --target master
 ```
@@ -55,8 +55,8 @@ gh release create vS0001-2 \
 
 ```bash
 # 創建 Release 並附加文件
-gh release create vS0001-2 \
-  --title "vS0001-2 - 系統設定檔案管理功能" \
+gh release create vS0002 \
+  --title "vS0002 - 歷史收益增強與系統診斷改進" \
   --notes-file RELEASE_NOTES.md \
   RELEASE_NOTES.md \
   CHANGELOG.md \
@@ -70,8 +70,8 @@ gh release create vS0001-2 \
 # 1. 創建 Release（獲取 Release ID）
 RELEASE_ID=$(gh api repos/:owner/:repo/releases \
   --method POST \
-  --field tag_name="vS0001-2" \
-  --field name="vS0001-2 - 系統設定檔案管理功能" \
+  --field tag_name="vS0002" \
+  --field name="vS0002 - 歷史收益增強與系統診斷改進" \
   --field body="$(cat RELEASE_NOTES.md)" \
   -q '.id')
 
@@ -103,13 +103,13 @@ gh api repos/:owner/:repo/releases/$RELEASE_ID/assets \
 #!/bin/bash
 # create_release.sh
 
-VERSION="vS0001-2"
+VERSION="vS0002"
 REPO_OWNER="YOUR_USERNAME"
 REPO_NAME="YOUR_REPO"
 
 # 創建 Release
 gh release create $VERSION \
-  --title "$VERSION - 系統設定檔案管理功能" \
+  --title "$VERSION - 歷史收益增強與系統診斷改進" \
   --notes-file RELEASE_NOTES.md \
   RELEASE_NOTES.md \
   CHANGELOG.md \
@@ -130,13 +130,13 @@ chmod +x create_release.sh
 在 GitHub Release 的 Description 欄位中，建議使用以下格式：
 
 ```markdown
-## 🎉 版本 vS0001-2
+## 🎉 版本 vS0002
 
 ### ✨ 主要更新
 
-- 新增系統設定檔案管理功能
-- 支持完整數據備份與還原
-- 優化數據導入性能
+- 歷史收益記錄增強（新增多個欄位）
+- 系統診斷功能全面改進
+- 模態窗口統一支援拖曳功能
 
 ### 📝 詳細說明
 
@@ -153,7 +153,7 @@ chmod +x create_release.sh
 
 1. **文件大小限制**：GitHub Release 附件大小限制為 2GB，但對於文本文件（如 .md）通常不是問題
 2. **文件格式**：建議使用 Markdown 格式（.md），GitHub 會自動渲染
-3. **版本標籤**：確保 Git 標籤已經推送到 GitHub（`git push origin vS0001-2`）
+3. **版本標籤**：確保 Git 標籤已經推送到 GitHub（`git push origin vS0002`）
 4. **權限要求**：您需要對倉庫有寫入權限才能創建 Release
 
 ## 驗證 Release
@@ -161,13 +161,15 @@ chmod +x create_release.sh
 創建 Release 後，訪問以下 URL 驗證：
 
 ```
-https://github.com/YOUR_USERNAME/YOUR_REPO/releases/tag/vS0001-2
+https://github.com/YOUR_USERNAME/YOUR_REPO/releases/tag/vS0002
 ```
 
 您應該能看到：
 - Release 標題和說明
 - 附加的文件列表
 - 可以下載的文件連結
+
+
 
 
 

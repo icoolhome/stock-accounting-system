@@ -60,6 +60,7 @@ const Settings = () => {
     is_default: false,
   });
 
+
   // 密碼設定
   const [passwordSettings, setPasswordSettings] = useState({
     currentPassword: '',
@@ -219,6 +220,10 @@ const Settings = () => {
       const dividendsResponse = await axios.get('/api/dividends');
       const dividends = dividendsResponse.data.data || [];
       
+      // 獲取銀行明細
+      const bankTransactionsResponse = await axios.get('/api/bank-transactions');
+      const bankTransactions = bankTransactionsResponse.data.data || [];
+      
       // 獲取庫存管理（計算結果）
       const holdingsResponse = await axios.get('/api/holdings');
       const holdings = holdingsResponse.data.data || [];
@@ -306,6 +311,15 @@ const Settings = () => {
           share_count: dividend.share_count,
           source: dividend.source,
           description: dividend.description,
+        })),
+        bankTransactions: bankTransactions.map((bt: any) => ({
+          bank_name: bt.bank_name,
+          bank_account_number: bt.account_number,
+          transaction_date: bt.transaction_date,
+          description: bt.description,
+          transaction_category: bt.transaction_category,
+          deposit_amount: bt.deposit_amount,
+          withdrawal_amount: bt.withdrawal_amount,
         })),
         holdings: holdings.map((holding: any) => ({
           account_name: holding.account_name,
@@ -611,11 +625,12 @@ const Settings = () => {
             let transactionIds: number[] | null = null;
             if (settlement.transaction_ids) {
               try {
-                const oldIds = typeof settlement.transaction_ids === 'string' 
-                  ? JSON.parse(settlement.transaction_ids) 
-                  : settlement.transaction_ids;
                 // 注意：由於ID映射複雜，這裡簡化處理，只導入settlement本身
                 // 實際使用中，transaction_ids可能無法完全匹配
+                transactionIds = typeof settlement.transaction_ids === 'string' 
+                  ? JSON.parse(settlement.transaction_ids) 
+                  : settlement.transaction_ids;
+                // const oldIds = transactionIds; // 保留備用
               } catch (e) {
                 // 忽略解析錯誤
               }
@@ -656,6 +671,46 @@ const Settings = () => {
             });
           } catch (err: any) {
             console.warn('歷史收益導入失敗:', dividend.stock_code, err.response?.data?.message || err.message);
+          }
+        }
+      }
+
+      // 載入銀行明細（需要使用銀行帳戶ID映射）
+      if (importData.bankTransactions && Array.isArray(importData.bankTransactions)) {
+        for (const bt of importData.bankTransactions) {
+          try {
+            // 查找對應的銀行帳戶ID
+            let bankAccountId = null;
+            if (bt.bank_name && bt.bank_account_number) {
+              const key = `${bt.bank_name}|${bt.bank_account_number}`;
+              bankAccountId = bankAccountMap.get(key) || null;
+              if (!bankAccountId) {
+                // 如果映射中沒有，嘗試從已獲取的帳戶列表中查找
+                const matchedAccount = allBankAccounts.find((acc: any) => 
+                  acc.bank_name === bt.bank_name && 
+                  acc.account_number === bt.bank_account_number
+                );
+                if (matchedAccount) {
+                  bankAccountId = matchedAccount.id;
+                }
+              }
+            }
+
+            if (!bankAccountId) {
+              console.warn('銀行明細導入失敗: 找不到對應的銀行帳戶', bt.bank_name, bt.bank_account_number);
+              continue;
+            }
+
+            await axios.post('/api/bank-transactions', {
+              bank_account_id: bankAccountId,
+              transaction_date: bt.transaction_date,
+              description: bt.description || null,
+              transaction_category: bt.transaction_category || null,
+              deposit_amount: bt.deposit_amount || 0,
+              withdrawal_amount: bt.withdrawal_amount || 0,
+            });
+          } catch (err: any) {
+            console.warn('銀行明細導入失敗:', bt.transaction_date, err.response?.data?.message || err.message);
           }
         }
       }
@@ -1490,7 +1545,7 @@ const Settings = () => {
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
               <h3 className="text-sm font-medium text-blue-900 mb-2">檔案管理說明</h3>
               <p className="text-sm text-blue-700">
-                您可以在此導出完整系統備份（包含系統設定、證券帳戶、銀行帳戶、交易記錄、交割記錄、歷史收益、庫存管理等），或載入備份檔案以還原系統數據。
+                您可以在此導出完整系統備份（包含系統設定、證券帳戶、銀行帳戶、銀行明細、交易記錄、交割記錄、歷史收益、庫存管理等），或載入備份檔案以還原系統數據。
               </p>
             </div>
 
@@ -1498,7 +1553,7 @@ const Settings = () => {
             <div className="border border-gray-200 rounded-lg p-4">
               <h3 className="text-lg font-semibold text-gray-900 mb-2">1. 導出存檔</h3>
               <p className="text-sm text-gray-600 mb-4">
-                導出完整系統備份（包含系統設定、幣別設定、交易記錄、證券帳戶、銀行帳戶、交割記錄、歷史收益、庫存管理等所有數據）
+                導出完整系統備份（包含系統設定、幣別設定、交易記錄、證券帳戶、銀行帳戶、銀行明細、交割記錄、歷史收益、庫存管理等所有數據）
               </p>
               <button
                 onClick={handleExportSettings}
@@ -1513,7 +1568,7 @@ const Settings = () => {
             <div className="border border-gray-200 rounded-lg p-4">
               <h3 className="text-lg font-semibold text-gray-900 mb-2">2. 載入存檔(覆蓋)</h3>
               <p className="text-sm text-gray-600 mb-4">
-                從JSON檔案載入完整備份並還原所有數據（包含系統設定、幣別設定、交易記錄、證券帳戶、銀行帳戶、交割記錄、歷史收益等，此操作會添加數據到現有系統，請謹慎操作）
+                從JSON檔案載入完整備份並還原所有數據（包含系統設定、幣別設定、交易記錄、證券帳戶、銀行帳戶、銀行明細、交割記錄、歷史收益等，此操作會添加數據到現有系統，請謹慎操作）
               </p>
               <div className="space-y-2">
                 <label className="block">

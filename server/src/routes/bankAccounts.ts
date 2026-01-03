@@ -1,7 +1,6 @@
 import express from 'express';
-import { getDatabase } from '../database';
+import { all, get, run } from '../database';
 import { authenticate, AuthRequest } from '../middleware/auth';
-import { promisify } from 'util';
 
 const router = express.Router();
 
@@ -10,10 +9,7 @@ router.use(authenticate);
 // 獲取所有銀行帳戶
 router.get('/', async (req: AuthRequest, res) => {
   try {
-    const db = getDatabase();
-    const all = promisify(db.all.bind(db));
-
-    const accounts = await all(
+    const accounts = await all<any>(
       `SELECT ba.*, sa.account_name as securities_account_name, sa.broker_name 
        FROM bank_accounts ba 
        LEFT JOIN securities_accounts sa ON ba.securities_account_id = sa.id 
@@ -53,22 +49,11 @@ router.post('/', async (req: AuthRequest, res) => {
       });
     }
 
-    const db = getDatabase();
-    const insertBankAccount = (sql: string, params: any[]) =>
-      new Promise<number>((resolve, reject) => {
-        db.run(sql, params, function (err) {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(this.lastID);
-          }
-        });
-      });
-
-    const newBankAccountId = await insertBankAccount(
+    const result = await run(
       'INSERT INTO bank_accounts (user_id, securities_account_id, bank_name, account_number, account_type, balance, currency) VALUES (?, ?, ?, ?, ?, ?, ?)',
       [req.userId, securities_account_id || null, bank_name, account_number, account_type, balance, currency]
     );
+    const newBankAccountId = result.lastID;
 
     res.status(201).json({
       success: true,
@@ -91,11 +76,7 @@ router.put('/:id', async (req: AuthRequest, res) => {
     const { id } = req.params;
     const { securities_account_id, bank_name, account_number, account_type, balance, currency } = req.body;
 
-    const db = getDatabase();
-    const get = promisify(db.get.bind(db));
-    const run = promisify(db.run.bind(db));
-
-    const account: any = await get(
+    const account: any = await get<any>(
       'SELECT * FROM bank_accounts WHERE id = ? AND user_id = ?',
       [id, req.userId]
     );
@@ -128,11 +109,7 @@ router.put('/:id', async (req: AuthRequest, res) => {
 router.delete('/:id', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
-    const db = getDatabase();
-    const get = promisify(db.get.bind(db));
-    const run = promisify(db.run.bind(db));
-
-    const account: any = await get(
+    const account: any = await get<any>(
       'SELECT * FROM bank_accounts WHERE id = ? AND user_id = ?',
       [id, req.userId]
     );

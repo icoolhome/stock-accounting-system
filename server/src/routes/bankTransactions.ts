@@ -1,7 +1,6 @@
 import express from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
-import { getDatabase } from '../database';
-import { promisify } from 'util';
+import { all, get, run } from '../database';
 
 const router = express.Router();
 
@@ -12,9 +11,6 @@ router.use(authenticate);
 router.get('/', async (req: AuthRequest, res) => {
   try {
     const { bankAccountId, startDate, endDate } = req.query;
-    const db = getDatabase();
-    const all = promisify(db.all.bind(db));
-
     let query = `SELECT bt.*, ba.bank_name, ba.account_number, ba.account_type
                  FROM bank_transactions bt 
                  LEFT JOIN bank_accounts ba ON bt.bank_account_id = ba.id 
@@ -36,7 +32,7 @@ router.get('/', async (req: AuthRequest, res) => {
 
     query += ' ORDER BY bt.transaction_date DESC, bt.created_at DESC';
 
-    const transactions = await all(query, params);
+    const transactions = await all<any>(query, params);
 
     res.json({
       success: true,
@@ -54,10 +50,7 @@ router.get('/', async (req: AuthRequest, res) => {
 router.get('/:id', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
-    const db = getDatabase();
-    const get = promisify(db.get.bind(db));
-
-    const transaction: any = await get(
+    const transaction: any = await get<any>(
       'SELECT bt.*, ba.bank_name, ba.account_number FROM bank_transactions bt LEFT JOIN bank_accounts ba ON bt.bank_account_id = ba.id WHERE bt.id = ? AND bt.user_id = ?',
       [id, req.userId]
     );
@@ -93,9 +86,6 @@ router.post('/', async (req: AuthRequest, res) => {
       });
     }
 
-    const db = getDatabase();
-    const run = promisify(db.run.bind(db));
-    const get = promisify(db.get.bind(db));
 
     const deposit = deposit_amount || 0;
     const withdrawal = withdrawal_amount || 0;
@@ -116,7 +106,7 @@ router.post('/', async (req: AuthRequest, res) => {
     );
 
     // 更新銀行帳戶餘額
-    const account: any = await get(
+    const account: any = await get<any>(
       'SELECT balance FROM bank_accounts WHERE id = ? AND user_id = ?',
       [bank_account_id, req.userId]
     );
@@ -147,12 +137,8 @@ router.put('/:id', async (req: AuthRequest, res) => {
     const { id } = req.params;
     const { bank_account_id, transaction_date, description, transaction_category, deposit_amount, withdrawal_amount } = req.body;
 
-    const db = getDatabase();
-    const get = promisify(db.get.bind(db));
-    const run = promisify(db.run.bind(db));
-
     // 獲取舊記錄
-    const existing: any = await get(
+    const existing: any = await get<any>(
       'SELECT id, bank_account_id, deposit_amount, withdrawal_amount FROM bank_transactions WHERE id = ? AND user_id = ?',
       [id, req.userId]
     );
@@ -175,7 +161,7 @@ router.put('/:id', async (req: AuthRequest, res) => {
     // 如果銀行帳戶變更了，需要還原舊帳戶的餘額並更新新帳戶的餘額
     if (existing.bank_account_id !== bank_account_id) {
       // 還原舊帳戶餘額
-      const oldAccount: any = await get(
+      const oldAccount: any = await get<any>(
         'SELECT balance FROM bank_accounts WHERE id = ? AND user_id = ?',
         [existing.bank_account_id, req.userId]
       );
@@ -188,7 +174,7 @@ router.put('/:id', async (req: AuthRequest, res) => {
       }
 
       // 更新新帳戶餘額
-      const newAccount: any = await get(
+      const newAccount: any = await get<any>(
         'SELECT balance FROM bank_accounts WHERE id = ? AND user_id = ?',
         [bank_account_id, req.userId]
       );
@@ -201,7 +187,7 @@ router.put('/:id', async (req: AuthRequest, res) => {
       }
     } else {
       // 銀行帳戶未變更，直接更新餘額
-      const account: any = await get(
+      const account: any = await get<any>(
         'SELECT balance FROM bank_accounts WHERE id = ? AND user_id = ?',
         [bank_account_id, req.userId]
       );
@@ -247,12 +233,9 @@ router.put('/:id', async (req: AuthRequest, res) => {
 router.delete('/:id', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
-    const db = getDatabase();
-    const get = promisify(db.get.bind(db));
-    const run = promisify(db.run.bind(db));
 
     // 獲取要刪除的記錄
-    const existing: any = await get(
+    const existing: any = await get<any>(
       'SELECT id, bank_account_id, deposit_amount, withdrawal_amount FROM bank_transactions WHERE id = ? AND user_id = ?',
       [id, req.userId]
     );
@@ -265,7 +248,7 @@ router.delete('/:id', async (req: AuthRequest, res) => {
     }
 
     // 還原銀行帳戶餘額
-    const account: any = await get(
+    const account: any = await get<any>(
       'SELECT balance FROM bank_accounts WHERE id = ? AND user_id = ?',
       [existing.bank_account_id, req.userId]
     );

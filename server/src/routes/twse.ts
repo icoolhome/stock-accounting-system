@@ -40,7 +40,7 @@ router.get('/exrights', async (req: AuthRequest, res) => {
       });
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as any;
 
     res.json({
       success: true,
