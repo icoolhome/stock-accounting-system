@@ -102,8 +102,13 @@ cd /d "%~dp0"
 
 REM 使用 concurrently 在同一個窗口中運行所有服務
 if exist "node_modules\concurrently\dist\bin\concurrently.js" (
-    REM 使用 PowerShell 在背景延遲打開瀏覽器（不創建新窗口）
-    powershell -WindowStyle Hidden -Command "Start-Sleep -Seconds 10; Start-Process 'http://localhost:3000'"
+    REM 創建臨時批處理文件來延遲打開瀏覽器
+    set OPEN_BROWSER=%TEMP%\open_browser_%RANDOM%.bat
+    echo @echo off > "!OPEN_BROWSER!"
+    echo timeout /t 10 /nobreak ^>nul 2^>^&1 >> "!OPEN_BROWSER!"
+    echo start http://localhost:3000 >> "!OPEN_BROWSER!"
+    echo del "%%~f0" >> "!OPEN_BROWSER!"
+    start "" "!OPEN_BROWSER!"
     call npm start
 ) else (
     echo [錯誤] 找不到 concurrently，請先執行: npm install

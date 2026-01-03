@@ -1,5 +1,39 @@
 # 更新日誌
 
+## vS0002-1 (2026-01-03)
+
+### 性能優化
+- **數據庫索引優化**
+  - 為所有主要數據表添加索引，大幅提升查詢性能
+  - 添加 transactions 表索引（user_id, trade_date, stock_code, securities_account_id）
+  - 添加 settlements 表索引（user_id, settlement_date, bank_account_id）
+  - 添加 dividends 表索引（user_id, record_date, stock_code）
+  - 添加 holdings 表索引（user_id, stock_code, securities_account_id）
+  - 添加 bank_transactions 表索引（user_id, transaction_date, bank_account_id）
+  - 添加其他相關表的索引
+  - 查詢速度可提升數倍到數十倍（視數據量而定）
+
+### UI/UX 改進
+- **個股查詢頁面優化**
+  - 「資料來源：Win 投資」對齊到輸入框右側邊界
+  - 調整輸入框和按鈕的寬度對齊，統一視覺效果
+  - 改進搜尋區域的佈局和對齊方式
+
+- **使用指南更新**
+  - 在步驟 7「讚賞碼」中添加三張 QR Code 圖片（qrcode.png, qrcode1.png, qrcode2.png）
+  - 步驟 7 設置為全寬顯示（col-span-2）
+  - 圖片水平排列顯示
+
+### 技術改進
+- **啟動腳本優化**
+  - 移除臨時批處理文件方式，使用 PowerShell 隱藏窗口方式打開瀏覽器
+  - 整合服務到單一窗口，避免創建多個 cmd.exe 窗口
+  - 改進 stop.bat 文件編碼，使用 GBK 編碼確保中文顯示正常
+
+- **開發體驗改進**
+  - 關閉 Vite 代理的請求/回應日誌輸出，保持控制台簡潔
+  - 僅保留錯誤日誌輸出，便於調試問題
+
 ## vS0002 (2026-01-03)
 
 ### 新增功能

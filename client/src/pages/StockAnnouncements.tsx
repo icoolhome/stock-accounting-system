@@ -267,7 +267,6 @@ const StockAnnouncements = () => {
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-800">個股查詢</h1>
-        <p className="text-sm text-gray-500">資料來源：<span className="font-medium text-blue-600">Win 投資</span></p>
       </div>
 
       {/* 初始使用提示（簡化版，導向新頁面） */}
@@ -312,7 +311,7 @@ const StockAnnouncements = () => {
           <label className="block text-sm font-medium text-gray-700 mb-2">
             股票代號或名稱
           </label>
-          <div className="relative" style={{ width: '50%' }}>
+          <div className="relative w-full max-w-md">
             <input
               type="text"
               value={searchKeyword}
@@ -321,6 +320,11 @@ const StockAnnouncements = () => {
               placeholder="請輸入股票代號（如：2330）或股票名稱（如：台積電）"
               className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+            <div className="text-right mt-1">
+              <span className="text-sm text-gray-500">
+                資料來源：<span className="font-medium text-blue-600">Win 投資</span>
+              </span>
+            </div>
             {searchKeyword && (
               <button
                 onClick={() => setSearchKeyword('')}
@@ -418,7 +422,7 @@ const StockAnnouncements = () => {
           </div>
         )}
 
-        <div className="flex items-center justify-end gap-3">
+        <div className="flex items-center justify-start gap-3" style={{ width: '100%', maxWidth: '28rem' }}>
           <button
             onClick={handleClear}
             className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"

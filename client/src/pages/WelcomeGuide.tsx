@@ -120,13 +120,6 @@ const WelcomeGuide = () => {
                 >
                   前往交割管理 →
                 </button>
-                <div className="mt-4 flex justify-center">
-                  <img 
-                    src="/qrcode.png" 
-                    alt="讚賞碼" 
-                    className="max-w-xs w-full h-auto"
-                  />
-                </div>
               </div>
             </div>
 
@@ -145,6 +138,41 @@ const WelcomeGuide = () => {
                 >
                   前往銀行帳戶 →
                 </button>
+              </div>
+            </div>
+
+            <div className="col-span-2 flex items-start gap-4 p-4 bg-white rounded-lg border border-pink-100 hover:shadow-md transition-shadow">
+              <div className="flex-shrink-0 w-8 h-8 bg-pink-600 text-white rounded-full flex items-center justify-center font-bold">
+                7
+              </div>
+              <div className="flex-1">
+                <p className="text-gray-800 font-medium mb-1">讚賞碼</p>
+                <p className="text-sm text-gray-600 mb-2">
+                  感謝您的使用，如有任何問題歡迎聯繫我們
+                </p>
+                <div className="mt-4 flex flex-row items-center justify-center gap-4 flex-wrap">
+                  <div className="flex justify-center">
+                    <img 
+                      src="/qrcode.png" 
+                      alt="讚賞碼" 
+                      className="max-w-xs w-full h-auto"
+                    />
+                  </div>
+                  <div className="flex justify-center">
+                    <img 
+                      src="/qrcode1.png" 
+                      alt="全支付 讚賞碼" 
+                      className="max-w-xs w-full h-auto"
+                    />
+                  </div>
+                  <div className="flex justify-center">
+                    <img 
+                      src="/qrcode2.png" 
+                      alt="富邦 讚賞碼" 
+                      className="max-w-xs w-full h-auto"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </div>

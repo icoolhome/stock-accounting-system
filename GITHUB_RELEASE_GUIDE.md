@@ -20,8 +20,8 @@
 2. 點擊右側的 **"Releases"** 鏈接，或直接訪問：`https://github.com/YOUR_USERNAME/YOUR_REPO/releases`
 3. 點擊 **"Draft a new release"** 或 **"Create a new release"**
 4. 填寫 Release 信息：
-   - **Tag version**: 輸入標籤名稱，例如 `vS0002`
-   - **Release title**: 輸入標題，例如 `vS0002 - 歷史收益增強與系統診斷改進`
+   - **Tag version**: 輸入標籤名稱，例如 `vS0002-1`
+   - **Release title**: 輸入標題，例如 `vS0002-1 - 性能優化與UI改進`
    - **Description**: 複製 `RELEASE_NOTES.md` 的內容到這裡，或者直接寫入更新說明
 5. 可選：附加文件（見步驟 3）
 6. 點擊 **"Publish release"**
@@ -30,8 +30,8 @@
 
 ```bash
 # 使用 GitHub CLI 創建 Release
-gh release create vS0002 \
-  --title "vS0002 - 歷史收益增強與系統診斷改進" \
+gh release create vS0002-1 \
+  --title "vS0002-1 - 性能優化與UI改進" \
   --notes-file RELEASE_NOTES.md \
   --target master
 ```
@@ -55,8 +55,8 @@ gh release create vS0002 \
 
 ```bash
 # 創建 Release 並附加文件
-gh release create vS0002 \
-  --title "vS0002 - 歷史收益增強與系統診斷改進" \
+gh release create vS0002-1 \
+  --title "vS0002-1 - 性能優化與UI改進" \
   --notes-file RELEASE_NOTES.md \
   RELEASE_NOTES.md \
   CHANGELOG.md \

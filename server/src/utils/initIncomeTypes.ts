@@ -41,3 +41,4 @@ export async function initIncomeTypesForUser(userId: number): Promise<void> {
   }
 }
 
+

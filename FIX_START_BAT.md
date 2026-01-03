@@ -56,3 +56,4 @@ $bytes = $ansi.GetBytes($content)
 - 在中文 Windows 系統中，ANSI 編碼對應 **GBK/GB2312**
 - 文件開頭的 `chcp 936` 命令會設置代碼頁為 GBK，確保中文正確顯示
 
+

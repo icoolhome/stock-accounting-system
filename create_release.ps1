@@ -1,8 +1,8 @@
 # GitHub Release 創建腳本
 # 使用方法：在 PowerShell 中執行 .\create_release.ps1
 
-$VERSION = "vS0002"
-$TITLE = "vS0002 - 歷史收益增強與系統診斷改進"
+$VERSION = "vS0002-1"
+$TITLE = "vS0002-1 - 性能優化與UI改進"
 
 Write-Host "正在創建 GitHub Release: $VERSION" -ForegroundColor Green
 

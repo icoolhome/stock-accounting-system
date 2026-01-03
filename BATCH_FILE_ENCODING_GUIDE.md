@@ -60,3 +60,4 @@ type start.bat
 - **記事本**：另存為 → 編碼選擇「ANSI」
 - **PowerShell**：使用 `[System.Text.Encoding]::Default` 編碼
 
+
