@@ -145,30 +145,51 @@ function downloadFile(url, filepath) {
   });
 }
 
+async function checkCommandWithRetry(command, maxRetries = 10, delay = 1000) {
+  for (let i = 0; i < maxRetries; i++) {
+    if (checkCommand(command)) {
+      return true;
+    }
+    if (i < maxRetries - 1) {
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  return false;
+}
+
 async function installNodeJs() {
-  logInfo('Node.js is not installed');
-  logInfo('Starting Node.js installation...');
+  logInfo('Node.js 未安裝');
+  logInfo('開始自動安裝 Node.js...');
+  console.log();
   
   // Try Chocolatey first
   if (checkCommand('choco')) {
+    logInfo('偵測到 Chocolatey，使用 Chocolatey 安裝 Node.js...');
     const success = await installWithChocolatey();
     if (success) {
-      // Wait a bit for PATH to update
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      if (checkCommand('node')) {
+      logInfo('等待 PATH 環境變數更新...');
+      // Wait longer and retry multiple times
+      const nodeAvailable = await checkCommandWithRetry('node', 15, 2000);
+      if (nodeAvailable) {
+        const version = getNodeVersion();
+        logSuccess(`Node.js 安裝成功！版本: ${version}`);
         return true;
+      } else {
+        logWarn('Node.js 安裝完成，但 PATH 尚未更新');
+        logWarn('請關閉此視窗並重新運行 setup-node.bat');
+        return false;
       }
     }
   }
   
   // Fallback to downloading installer
-  logInfo('Downloading Node.js installer...');
-  logInfo('Please wait, this may take a few minutes...');
+  logInfo('正在下載 Node.js 安裝程序...');
+  logInfo('這可能需要幾分鐘，請稍候...');
+  console.log();
   
   const tempDir = path.join(os.tmpdir(), 'stock-accounting-setup');
   if (!fs.existsSync(tempDir)) {
-    fs.mkdirSync(tempDir);
+    fs.mkdirSync(tempDir, { recursive: true });
   }
   
   const installerPath = path.join(tempDir, 'nodejs-installer.msi');
@@ -176,31 +197,64 @@ async function installNodeJs() {
   
   try {
     await downloadFile(nodeUrl, installerPath);
-    logInfo('Starting installation...');
-    logInfo('Please follow the installation wizard');
+    logSuccess('下載完成');
+    console.log();
+    logInfo('正在啟動安裝程序...');
+    logInfo('安裝將在後台進行，請稍候...');
     
-    execSync(`msiexec /i "${installerPath}" /quiet /norestart`, {
-      stdio: 'inherit',
+    // Use /qn for completely silent installation, /l*v for logging
+    const logPath = path.join(tempDir, 'nodejs-install.log');
+    execSync(`msiexec /i "${installerPath}" /qn /norestart /l*v "${logPath}"`, {
+      stdio: 'ignore',
     });
     
-    // Cleanup
-    if (fs.existsSync(installerPath)) {
-      fs.unlinkSync(installerPath);
+    logInfo('安裝程序已執行，等待安裝完成...');
+    
+    // Wait for installation to complete and PATH to update
+    await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds for installation
+    
+    // Try to refresh environment and check for node
+    logInfo('檢查 Node.js 是否可用...');
+    const nodeAvailable = await checkCommandWithRetry('node', 20, 2000);
+    
+    if (nodeAvailable) {
+      const version = getNodeVersion();
+      logSuccess(`Node.js 安裝成功！版本: ${version}`);
+      
+      // Cleanup
+      if (fs.existsSync(installerPath)) {
+        fs.unlinkSync(installerPath);
+      }
+      if (fs.existsSync(logPath)) {
+        fs.unlinkSync(logPath);
+      }
+      
+      return true;
+    } else {
+      logWarn('Node.js 安裝程序已執行，但可能需要重啟終端才能使用');
+      logWarn('請關閉此視窗並重新運行 setup-node.bat');
+      logInfo(`安裝日誌位於: ${logPath}`);
+      
+      // Cleanup installer but keep log
+      if (fs.existsSync(installerPath)) {
+        fs.unlinkSync(installerPath);
+      }
+      
+      return false;
     }
-    
-    logSuccess('Node.js installer executed');
-    logWarn('Please restart your terminal or restart your computer');
-    logWarn('Then run setup.js again');
-    
-    return false;
   } catch (error) {
-    logError('Failed to download or install Node.js');
-    logInfo('Please download and install Node.js manually from:');
+    logError(`安裝失敗: ${error.message}`);
+    logInfo('請手動下載並安裝 Node.js：');
     logInfo('https://nodejs.org/');
+    console.log();
     
     // Cleanup
     if (fs.existsSync(installerPath)) {
-      fs.unlinkSync(installerPath);
+      try {
+        fs.unlinkSync(installerPath);
+      } catch (e) {
+        // Ignore cleanup errors
+      }
     }
     
     return false;
