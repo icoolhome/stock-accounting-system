@@ -15,6 +15,7 @@
     "postinstall": "cd server && npm install && cd ../client && npm install",
     "start:node": "node start.js",
     "start:node-window": "node start-node.js",
+    "stop:node": "node stop-node.js",
     "setup": "node setup.js"
   },
   "keywords": ["stock", "accounting", "trading"],
