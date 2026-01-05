@@ -100,16 +100,16 @@ function question(query) {
 
 async function selectMode() {
   console.log('\n========================================');
-  console.log('  Stock Accounting System - Start');
+  console.log('  股票記帳系統 - 啟動');
   console.log('========================================\n');
   console.log('========================================');
-  console.log('  Select startup mode');
+  console.log('  請選擇啟動模式');
   console.log('========================================');
-  console.log('  1. Normal mode (show window)');
-  console.log('  2. Background mode (hide window)');
+  console.log('  1. 正常模式（顯示視窗）');
+  console.log('  2. 後台模式（隱藏視窗）');
   console.log('========================================\n');
   
-  const answer = await question('Select mode (1 or 2, default 1): ');
+  const answer = await question('請選擇模式（1 或 2，預設 1）：');
   return answer.trim() || '1';
 }
 
@@ -117,7 +117,7 @@ function startServer(mode) {
   const serverDir = path.join(__dirname, 'server');
   const isHidden = mode === '2';
   
-  logInfo('Starting backend server...');
+  logInfo('正在啟動後端伺服器...');
   
   if (isHidden && process.platform === 'win32') {
     // Windows: Use detached process to hide window
@@ -143,7 +143,7 @@ function startClient(mode) {
   const clientDir = path.join(__dirname, 'client');
   const isHidden = mode === '2';
   
-  logInfo('Starting frontend client...');
+  logInfo('正在啟動前端客戶端...');
   
   if (isHidden && process.platform === 'win32') {
     // Windows: Use detached process to hide window
@@ -201,22 +201,22 @@ function waitForServer(port = 3001, maxAttempts = 30) {
 async function main() {
   // Check Node.js
   if (!checkNodeJs()) {
-    logError('Node.js is not installed');
-    logInfo('Please run setup.js or setup-node.bat first to install Node.js');
+    logError('Node.js 未安裝');
+    logInfo('請先運行 setup.js 或 setup-node.bat 以安裝 Node.js');
     process.exit(1);
   }
   
   // Check npm
   if (!checkNpmInstalled()) {
-    logError('npm is not installed');
+    logError('npm 未安裝');
     process.exit(1);
   }
   
   // Check dependencies
   const deps = checkDependencies();
   if (!deps.rootExists || !deps.serverExists || !deps.clientExists) {
-    logWarn('Dependencies are not installed');
-    logInfo('Please run setup.js or setup-node.bat first to install dependencies');
+    logWarn('依賴項目未安裝');
+    logInfo('請先運行 setup.js 或 setup-node.bat 以安裝依賴項目');
     process.exit(1);
   }
   
@@ -224,9 +224,9 @@ async function main() {
   const mode = await selectMode();
   
   if (mode === '1') {
-    logInfo('Starting in normal mode...');
+    logInfo('正在以正常模式啟動...');
   } else {
-    logInfo('Starting in background mode...');
+    logInfo('正在以後台模式啟動...');
   }
   
   console.log();
@@ -234,7 +234,7 @@ async function main() {
   // Use concurrently for normal mode, separate processes for background mode
   if (mode === '1') {
     // Normal mode: Use concurrently to run both services
-    logInfo('Starting services with concurrently...');
+    logInfo('正在使用 concurrently 啟動服務...');
     const concurrently = spawn('npm', ['start'], {
       cwd: __dirname,
       stdio: 'inherit',
@@ -244,7 +244,7 @@ async function main() {
     // Handle Ctrl+C
     process.on('SIGINT', () => {
       console.log('\n');
-      logInfo('Stopping system...');
+      logInfo('正在停止系統...');
       concurrently.kill();
       process.exit(0);
     });
@@ -253,22 +253,22 @@ async function main() {
     process.stdin.resume();
     
     // Wait for services to start, then open browser
-    logInfo('Waiting for services to start...');
+    logInfo('等待服務啟動...');
     await new Promise(resolve => setTimeout(resolve, 10000));
     
     if (openBrowser('http://localhost:3000')) {
-      logSuccess('Browser opened');
+      logSuccess('瀏覽器已打開');
     } else {
-      logWarn('Could not open browser automatically');
-      logInfo('Please open http://localhost:3000 in your browser');
+      logWarn('無法自動打開瀏覽器');
+      logInfo('請在瀏覽器中打開 http://localhost:3000');
     }
     
     console.log();
-    logSuccess('System started successfully!');
-    logInfo('Backend API: http://localhost:3001');
-    logInfo('Frontend: http://localhost:3000');
+    logSuccess('系統啟動成功！');
+    logInfo('後端 API: http://localhost:3001');
+    logInfo('前端: http://localhost:3000');
     console.log();
-    logInfo('Press Ctrl+C to stop the system');
+    logInfo('按 Ctrl+C 停止系統');
     console.log();
     
     return;
@@ -278,11 +278,11 @@ async function main() {
     
     // Wait for server to be ready
     try {
-      logInfo('Waiting for server to start...');
+      logInfo('等待伺服器啟動...');
       await waitForServer(3001, 60);
-      logSuccess('Server is ready');
+      logSuccess('伺服器已就緒');
     } catch (error) {
-      logWarn('Server may not be ready yet, but continuing...');
+      logWarn('伺服器可能尚未就緒，但繼續執行...');
     }
     
     // Start client
@@ -294,28 +294,28 @@ async function main() {
   
   // Open browser (only in background mode, normal mode already handled)
   if (mode === '2') {
-    logInfo('Opening browser in 5 seconds...');
+    logInfo('將在 5 秒後打開瀏覽器...');
     await new Promise(resolve => setTimeout(resolve, 5000));
     
     if (openBrowser('http://localhost:3000')) {
-      logSuccess('Browser opened');
+      logSuccess('瀏覽器已打開');
     } else {
-      logWarn('Could not open browser automatically');
-      logInfo('Please open http://localhost:3000 in your browser');
+      logWarn('無法自動打開瀏覽器');
+      logInfo('請在瀏覽器中打開 http://localhost:3000');
     }
     
     console.log();
-    logSuccess('System started successfully!');
-    logInfo('Backend API: http://localhost:3001');
-    logInfo('Frontend: http://localhost:3000');
+    logSuccess('系統啟動成功！');
+    logInfo('後端 API: http://localhost:3001');
+    logInfo('前端: http://localhost:3000');
     console.log();
-    logInfo('System is running in background mode');
-    logInfo('Use stop.bat or stop-node.bat to stop the system');
+    logInfo('系統正在後台模式運行');
+    logInfo('使用 stop.bat 或 stop-node.bat 停止系統');
   }
 }
 
 main().catch((error) => {
-  logError(`Unexpected error: ${error.message}`);
+  logError(`發生未預期的錯誤: ${error.message}`);
   process.exit(1);
 });
 
