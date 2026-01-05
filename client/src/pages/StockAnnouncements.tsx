@@ -483,7 +483,7 @@ const StockAnnouncements = () => {
                     <tr
                       key={`${stock.stock_code}_${index}`}
                       className={`hover:bg-gray-50 ${
-                        selectedStock?.stock_code === stock.stock_code ? 'bg-blue-50' : ''
+                        selectedStock && selectedStock.stock_code === stock.stock_code ? 'bg-blue-50' : ''
                       }`}
                     >
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
