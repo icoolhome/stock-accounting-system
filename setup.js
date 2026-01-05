@@ -64,23 +64,24 @@ function getNpmVersion() {
 }
 
 function installDependencies(dir, name) {
-  logInfo(`Installing ${name} dependencies...`);
+  logInfo(`正在安裝 ${name} 依賴項目...`);
   try {
     execSync('npm install', {
       cwd: dir,
       stdio: 'inherit',
     });
-    logSuccess(`${name} dependencies installed successfully`);
+    logSuccess(`${name} 依賴項目安裝成功`);
     return true;
   } catch (error) {
-    logError(`Failed to install ${name} dependencies`);
+    logError(`${name} 依賴項目安裝失敗`);
     return false;
   }
 }
 
 function installWithChocolatey() {
-  logInfo('Chocolatey detected, using Chocolatey to install Node.js...');
-  logInfo('This may require administrator privileges');
+  logInfo('偵測到 Chocolatey，使用 Chocolatey 安裝 Node.js LTS 版本...');
+  logWarn('此操作可能需要管理員權限');
+  console.log();
   
   return new Promise((resolve) => {
     const choco = spawn('choco', ['install', 'nodejs-lts', '-y'], {
@@ -90,12 +91,17 @@ function installWithChocolatey() {
     
     choco.on('close', (code) => {
       if (code === 0) {
-        logSuccess('Node.js installed successfully via Chocolatey');
+        logSuccess('Node.js 已通過 Chocolatey 成功安裝');
         resolve(true);
       } else {
-        logWarn('Chocolatey installation failed');
+        logWarn('Chocolatey 安裝失敗');
         resolve(false);
       }
+    });
+    
+    choco.on('error', (error) => {
+      logError(`Chocolatey 執行錯誤: ${error.message}`);
+      resolve(false);
     });
   });
 }
@@ -203,28 +209,38 @@ async function installNodeJs() {
 
 async function main() {
   console.log('\n========================================');
-  console.log('  Stock Accounting System - Setup');
+  console.log('  股票記帳系統 - 安裝程序');
   console.log('========================================\n');
   
   // Check if Node.js is installed
+  let nodeJustInstalled = false;
   if (!checkCommand('node')) {
     const installed = await installNodeJs();
     if (!installed) {
+      console.log();
+      logError('Node.js 安裝未完成或需要重啟終端');
+      logInfo('請關閉此視窗，重新打開，然後再次運行 setup-node.bat');
       process.exit(1);
     }
+    nodeJustInstalled = true;
+    console.log();
   }
   
   const nodeVersion = getNodeVersion();
   const npmVersion = getNpmVersion();
   
-  logInfo('Node.js is already installed');
-  console.log(nodeVersion);
-  console.log(npmVersion);
+  if (nodeJustInstalled) {
+    logSuccess('Node.js 已成功安裝並可用');
+  } else {
+    logInfo('Node.js 已安裝');
+  }
+  logInfo(`Node.js 版本: ${nodeVersion}`);
+  logInfo(`npm 版本: ${npmVersion}`);
   console.log();
   
   // Install dependencies
-  logInfo('Installing project dependencies...');
-  logInfo('This may take several minutes...');
+  logInfo('正在安裝項目依賴項目...');
+  logInfo('這可能需要幾分鐘，請稍候...');
   console.log();
   
   const rootDir = __dirname;
@@ -253,13 +269,17 @@ async function main() {
   }
   
   console.log();
-  logSuccess('Setup completed successfully!');
-  logInfo('You can now run start.bat or npm run dev to start the system');
+  logSuccess('安裝完成！');
+  logInfo('現在可以運行 start-node.bat 或 npm run dev 來啟動系統');
   console.log();
 }
 
 main().catch((error) => {
-  logError(`Unexpected error: ${error.message}`);
+  console.log();
+  logError(`發生未預期的錯誤: ${error.message}`);
+  if (error.stack) {
+    console.log(error.stack);
+  }
   process.exit(1);
 });
 
