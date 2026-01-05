@@ -229,6 +229,7 @@ const StockAnnouncements = () => {
 
   // 選擇股票並載入詳細資訊（未使用，保留備用）
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // @ts-ignore - 未使用的函數，保留備用
   const _handleSelectStock = async (_stock: StockInfo) => {
     setSelectedStock(_stock);
     setSearchKeyword(`${_stock.stock_code} ${_stock.stock_name}`);
