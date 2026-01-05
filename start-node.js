@@ -4,6 +4,7 @@ const { spawn, execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
+const os = require('os');
 
 const colors = {
   reset: '\x1b[0m',
