@@ -120,12 +120,14 @@ function startServer(mode) {
   logInfo('Starting backend server...');
   
   if (isHidden && process.platform === 'win32') {
-    // Windows: Use start with /B to hide window
-    const serverProcess = spawn('cmd', ['/c', 'start', '/B', 'npm', 'start'], {
+    // Windows: Use detached process to hide window
+    const serverProcess = spawn('npm', ['start'], {
       cwd: serverDir,
       stdio: 'ignore',
       shell: true,
+      detached: true,
     });
+    serverProcess.unref();
     return serverProcess;
   } else {
     const serverProcess = spawn('npm', ['start'], {
@@ -144,12 +146,14 @@ function startClient(mode) {
   logInfo('Starting frontend client...');
   
   if (isHidden && process.platform === 'win32') {
-    // Windows: Use start with /B to hide window
-    const clientProcess = spawn('cmd', ['/c', 'start', '/B', 'npm', 'run', 'preview'], {
+    // Windows: Use detached process to hide window
+    const clientProcess = spawn('npm', ['run', 'preview'], {
       cwd: clientDir,
       stdio: 'ignore',
       shell: true,
+      detached: true,
     });
+    clientProcess.unref();
     return clientProcess;
   } else {
     const clientProcess = spawn('npm', ['run', 'preview'], {
@@ -227,26 +231,69 @@ async function main() {
   
   console.log();
   
-  // Start server
-  const serverProcess = startServer(mode);
-  
-  // Wait for server to be ready
-  try {
-    logInfo('Waiting for server to start...');
-    await waitForServer(3001, 60);
-    logSuccess('Server is ready');
-  } catch (error) {
-    logWarn('Server may not be ready yet, but continuing...');
+  // Use concurrently for normal mode, separate processes for background mode
+  if (mode === '1') {
+    // Normal mode: Use concurrently to run both services
+    logInfo('Starting services with concurrently...');
+    const concurrently = spawn('npm', ['start'], {
+      cwd: __dirname,
+      stdio: 'inherit',
+      shell: true,
+    });
+    
+    // Handle Ctrl+C
+    process.on('SIGINT', () => {
+      console.log('\n');
+      logInfo('Stopping system...');
+      concurrently.kill();
+      process.exit(0);
+    });
+    
+    // Keep process alive
+    process.stdin.resume();
+    
+    // Wait for services to start, then open browser
+    logInfo('Waiting for services to start...');
+    await new Promise(resolve => setTimeout(resolve, 10000));
+    
+    if (openBrowser('http://localhost:3000')) {
+      logSuccess('Browser opened');
+    } else {
+      logWarn('Could not open browser automatically');
+      logInfo('Please open http://localhost:3000 in your browser');
+    }
+    
+    console.log();
+    logSuccess('System started successfully!');
+    logInfo('Backend API: http://localhost:3001');
+    logInfo('Frontend: http://localhost:3000');
+    console.log();
+    logInfo('Press Ctrl+C to stop the system');
+    console.log();
+    
+    return;
+  } else {
+    // Background mode: Start services separately
+    const serverProcess = startServer(mode);
+    
+    // Wait for server to be ready
+    try {
+      logInfo('Waiting for server to start...');
+      await waitForServer(3001, 60);
+      logSuccess('Server is ready');
+    } catch (error) {
+      logWarn('Server may not be ready yet, but continuing...');
+    }
+    
+    // Start client
+    const clientProcess = startClient(mode);
+    
+    // Wait a bit for client to start
+    await new Promise(resolve => setTimeout(resolve, 3000));
   }
   
-  // Start client
-  const clientProcess = startClient(mode);
-  
-  // Wait a bit for client to start
-  await new Promise(resolve => setTimeout(resolve, 3000));
-  
-  // Open browser (only in normal mode)
-  if (mode === '1') {
+  // Open browser (only in background mode, normal mode already handled)
+  if (mode === '2') {
     logInfo('Opening browser in 5 seconds...');
     await new Promise(resolve => setTimeout(resolve, 5000));
     
@@ -256,30 +303,12 @@ async function main() {
       logWarn('Could not open browser automatically');
       logInfo('Please open http://localhost:3000 in your browser');
     }
-  }
-  
-  console.log();
-  logSuccess('System started successfully!');
-  logInfo('Backend API: http://localhost:3001');
-  logInfo('Frontend: http://localhost:3000');
-  console.log();
-  
-  if (mode === '1') {
-    logInfo('Press Ctrl+C to stop the system');
+    
     console.log();
-    
-    // Handle Ctrl+C
-    process.on('SIGINT', () => {
-      console.log('\n');
-      logInfo('Stopping system...');
-      serverProcess.kill();
-      clientProcess.kill();
-      process.exit(0);
-    });
-    
-    // Keep process alive
-    process.stdin.resume();
-  } else {
+    logSuccess('System started successfully!');
+    logInfo('Backend API: http://localhost:3001');
+    logInfo('Frontend: http://localhost:3000');
+    console.log();
     logInfo('System is running in background mode');
     logInfo('Use stop.bat or stop-node.bat to stop the system');
   }
