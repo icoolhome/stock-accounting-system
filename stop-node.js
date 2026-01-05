@@ -203,9 +203,9 @@ async function main() {
       logWarn('Port 3000 is still in use');
     }
     
-    // Try more aggressive approach
-    logInfo('Trying to kill all Node.js processes...');
-    killNodeProcesses();
+    // Try more aggressive approach - kill by ports again
+    logInfo('Trying to kill processes by ports again...');
+    killNodeProcessesByPorts();
     
     await new Promise(resolve => setTimeout(resolve, 2000));
     
