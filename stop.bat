@@ -1,63 +1,69 @@
 @echo off
 setlocal enabledelayedexpansion
-chcp 936 >nul 2>&1
+chcp 65001 >nul 2>&1
+
+REM Load language strings
+call "%~dp0load_language.bat" 2>nul
+
+REM Set default values if not loaded
+if not defined BATCH_STOP_TITLE set BATCH_STOP_TITLE=Stock Accounting System - Stop
+if not defined BATCH_STOP_STOPPING set BATCH_STOP_STOPPING=Stopping all Node.js processes...
+if not defined BATCH_STOP_SUCCESS set BATCH_STOP_SUCCESS=All services stopped
+if not defined BATCH_STOP_WARN set BATCH_STOP_WARN=Some services may still be running
+if not defined BATCH_COMMON_ERROR set BATCH_COMMON_ERROR=ERROR
+if not defined BATCH_COMMON_INFO set BATCH_COMMON_INFO=INFO
+if not defined BATCH_COMMON_SUCCESS set BATCH_COMMON_SUCCESS=SUCCESS
+if not defined BATCH_COMMON_WARN set BATCH_COMMON_WARN=WARN
+
 echo ========================================
-echo   股票記帳系統 - 停止服務
+echo   %BATCH_STOP_TITLE%
 echo ========================================
 echo.
 
-cd /d "%~dp0"
-
-echo [資訊] 正在檢查並停止服務...
+echo [%BATCH_COMMON_INFO%] %BATCH_STOP_STOPPING%
 echo.
 
-set STOPPED=0
-
-REM 停止端口 3001 的進程（後端伺服器）
-echo [資訊] 檢查端口 3001（後端伺服器）...
-for /f "tokens=5" %%a in ('netstat -ano 2^>nul ^| findstr ":3001" ^| findstr "LISTENING"') do (
-    set PID=%%a
-    echo [資訊] 發現進程 PID: !PID! 正在監聽端口 3001
-    taskkill /F /PID !PID! 2>nul
-    if !errorlevel! equ 0 (
-        echo [完成] 已停止端口 3001 的進程（PID: !PID!）
-        set STOPPED=1
-    ) else (
-        echo [警告] 無法停止進程 PID: !PID!，可能需要管理員權限
+REM Kill all node.exe processes related to this project
+for /f "tokens=2" %%a in ('netstat -ano ^| findstr ":3000\|:3001" ^| findstr "LISTENING"') do (
+    for /f "tokens=5" %%b in ('tasklist /FI "PID eq %%a" /FO CSV ^| findstr "node.exe"') do (
+        echo [%BATCH_COMMON_INFO%] Stopping process %%a...
+        taskkill /F /PID %%a >nul 2>&1
     )
 )
 
-REM 停止端口 3000 的進程（前端伺服器）
-echo [資訊] 檢查端口 3000（前端伺服器）...
-for /f "tokens=5" %%a in ('netstat -ano 2^>nul ^| findstr ":3000" ^| findstr "LISTENING"') do (
-    set PID=%%a
-    echo [資訊] 發現進程 PID: !PID! 正在監聽端口 3000
-    taskkill /F /PID !PID! 2>nul
-    if !errorlevel! equ 0 (
-        echo [完成] 已停止端口 3000 的進程（PID: !PID!）
-        set STOPPED=1
-    ) else (
-        echo [警告] 無法停止進程 PID: !PID!，可能需要管理員權限
+REM Kill all node.exe processes (more aggressive)
+taskkill /F /IM node.exe >nul 2>&1
+
+REM Clean up VBS files
+if exist "%TEMP%\stock_backend_vbs.txt" (
+    for /f %%f in (%TEMP%\stock_backend_vbs.txt) do (
+        if exist "%%f" del "%%f" >nul 2>&1
     )
+    del "%TEMP%\stock_backend_vbs.txt" >nul 2>&1
 )
 
-echo.
-echo [資訊] 再次檢查端口狀態...
-timeout /t 2 /nobreak >nul
+if exist "%TEMP%\stock_frontend_vbs.txt" (
+    for /f %%f in (%TEMP%\stock_frontend_vbs.txt) do (
+        if exist "%%f" del "%%f" >nul 2>&1
+    )
+    del "%TEMP%\stock_frontend_vbs.txt" >nul 2>&1
+)
 
-set REMAINING=0
-netstat -ano | findstr ":3001" | findstr "LISTENING" >nul 2>&1
-if !errorlevel! equ 0 set REMAINING=1
+REM Clean up any remaining VBS files
+del "%TEMP%\start_backend_*.vbs" >nul 2>&1
+del "%TEMP%\start_frontend_*.vbs" >nul 2>&1
 
-netstat -ano | findstr ":3000" | findstr "LISTENING" >nul 2>&1
-if !errorlevel! equ 0 set REMAINING=1
+REM Wait a moment
+timeout /t 1 /nobreak >nul
 
-if !REMAINING! equ 0 (
-    echo [完成] 所有服務已成功停止
+REM Verify services are stopped
+netstat -ano | findstr ":3000\|:3001" | findstr "LISTENING" >nul 2>&1
+if errorlevel 1 (
+    echo [%BATCH_COMMON_SUCCESS%] %BATCH_STOP_SUCCESS%
 ) else (
-    echo [警告] 仍有服務在運行，請檢查端口 3000 和 3001
+    echo [%BATCH_COMMON_WARN%] %BATCH_STOP_WARN%
+    echo [%BATCH_COMMON_INFO%] Please check Task Manager for remaining node.exe processes
 )
 
 echo.
-echo [完成] 停止流程完成
 pause
