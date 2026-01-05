@@ -278,21 +278,19 @@ async function main() {
     
     if (process.platform === 'win32') {
       // Windows: Use VBS script to run in background
-      const vbs = require('fs');
-      const tempDir = require('os').tmpdir();
+      const tempDir = os.tmpdir();
       const serverVbs = path.join(tempDir, `start_backend_${Date.now()}.vbs`);
       const clientVbs = path.join(tempDir, `start_frontend_${Date.now()}.vbs`);
       
       const serverDir = path.join(__dirname, 'server');
-      const clientDir = path.join(__dirname, 'client');
       
       // Create VBS script for server
       const serverVbsContent = `Set WshShell = CreateObject("WScript.Shell")\nWshShell.CurrentDirectory = "${serverDir.replace(/\\/g, '\\\\')}"\nWshShell.Run "cmd /c npm start", 0, False`;
-      vbs.writeFileSync(serverVbs, serverVbsContent, 'utf8');
+      fs.writeFileSync(serverVbs, serverVbsContent, 'utf8');
       
       // Create VBS script for client
       const clientVbsContent = `Set WshShell = CreateObject("WScript.Shell")\nWshShell.CurrentDirectory = "${__dirname.replace(/\\/g, '\\\\')}"\nWshShell.Run "cmd /c npm run start:client", 0, False`;
-      vbs.writeFileSync(clientVbs, clientVbsContent, 'utf8');
+      fs.writeFileSync(clientVbs, clientVbsContent, 'utf8');
       
       // Start server
       logInfo('正在啟動後端伺服器（後台）...');
