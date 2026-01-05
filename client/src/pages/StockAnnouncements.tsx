@@ -479,7 +479,7 @@ const StockAnnouncements = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {searchResults.map((stock, index) => (
+                  {searchResults.map((stock: StockInfo, index: number) => (
                     <tr
                       key={`${stock.stock_code}_${index}`}
                       className={`hover:bg-gray-50 ${
