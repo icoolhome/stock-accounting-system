@@ -230,15 +230,15 @@ const StockAnnouncements = () => {
   // 選擇股票並載入詳細資訊（未使用，保留備用）
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const _handleSelectStock = async (_stock: StockInfo) => {
-    setSelectedStock(stock);
-    setSearchKeyword(`${stock.stock_code} ${stock.stock_name}`);
+    setSelectedStock(_stock);
+    setSearchKeyword(`${_stock.stock_code} ${_stock.stock_name}`);
     setSearchResults([]);
     setSearchPerformed(false); // 隱藏搜尋結果列表
     
     // 載入股票詳細資訊
     try {
       setLoadingDetail(true);
-      const response = await axios.get(`/api/stocks/${stock.stock_code}/detail`);
+      const response = await axios.get(`/api/stocks/${_stock.stock_code}/detail`);
       if (response.data.success) {
         setStockDetail(response.data.data);
       }
@@ -246,7 +246,7 @@ const StockAnnouncements = () => {
       console.error('載入股票詳細資訊失敗:', err);
       // 即使失敗也顯示基本信息
       setStockDetail({
-        stockInfo: stock,
+        stockInfo: _stock,
         priceInfo: null,
         dividends: [],
         dividendStats: {
