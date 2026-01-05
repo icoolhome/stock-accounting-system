@@ -1,90 +1,76 @@
-# 推送到 GitHub - vS0002-1
+# ?券 GitHub - vS0002-1
 
-## 當前狀態
-✅ Git 倉庫已初始化
-✅ 代碼已提交
-✅ 版本標籤將創建（vS0002-1）
-⚠️ 尚未配置遠程倉庫（如果尚未配置）
+## ?嗅??????Git ?澈撌脣?憪?
+??隞?Ⅳ撌脫?鈭????璅惜撠撱綽?vS0002-1嚗??? 撠?蔭???澈嚗????芷?蝵殷?
 
-## 推送到 GitHub 的步驟
-
-### 步驟 1: 提交更改
+## ?券 GitHub ?郊撽?
+### 甇仿? 1: ?漱?湔
 
 ```bash
 cd f:\stock-ai\stock-accounting-system
 
-# 添加所有更改的文件
+# 瘛餃????寧??辣
 git add .
 
-# 提交更改
-git commit -m "版本 vS0002-1: 性能優化與UI改進"
+# ?漱?湔
+git commit -m "? vS0002-1: ?扯?芸??I?寥?
 ```
 
-### 步驟 2: 創建版本標籤
+### 甇仿? 2: ?萄遣?璅惜
 
 ```bash
-# 創建版本標籤
-git tag -a vS0002-1 -m "版本 vS0002-1: 性能優化與UI改進"
+# ?萄遣?璅惜
+git tag -a vS0002-1 -m "? vS0002-1: ?扯?芸??I?寥?
 ```
 
-### 步驟 3: 配置遠程倉庫（如果尚未配置）
+### 甇仿? 3: ?蔭???澈嚗????芷?蝵殷?
 
-如果您已經在 GitHub 上創建了倉庫，請執行：
-
+憒??典歇蝬 GitHub 銝撱箔??澈嚗??瑁?嚗?
 ```bash
-# 添加遠程倉庫（請將 YOUR_USERNAME 和 REPO_NAME 替換為實際值）
+# 瘛餃????澈嚗?撠?YOUR_USERNAME ??REPO_NAME ?踵??箏祕?潘?
 git remote add origin https://github.com/YOUR_USERNAME/REPO_NAME.git
 ```
 
-### 步驟 4: 推送到 GitHub
+### 甇仿? 4: ?券 GitHub
 
 ```bash
-# 推送主分支
+# ?券蜓?
 git push -u origin master
 
-# 推送版本標籤
-git push origin vS0002-1
+# ?券??祆?蝐?git push origin vS0002-1
 ```
 
-### 完整命令示例
+### 摰?賭誘蝷箔?
 
-假設您的 GitHub 用戶名是 `username`，倉庫名是 `stock-accounting-system`：
-
+?身?函? GitHub ?冽? `username`嚗澈? `stock-accounting-system`嚗?
 ```bash
 cd f:\stock-ai\stock-accounting-system
 git add .
-git commit -m "版本 vS0002-1: 性能優化與UI改進"
-git tag -a vS0002-1 -m "版本 vS0002-1: 性能優化與UI改進"
+git commit -m "? vS0002-1: ?扯?芸??I?寥?
+git tag -a vS0002-1 -m "? vS0002-1: ?扯?芸??I?寥?
 git remote add origin https://github.com/username/stock-accounting-system.git
 git push -u origin master
 git push origin vS0002-1
 ```
 
-## 如果還沒有 GitHub 倉庫
+## 憒?????GitHub ?澈
 
-1. 訪問 https://github.com/new
-2. 創建新倉庫（建議命名為 `stock-accounting-system`）
-3. **不要**初始化 README、.gitignore 或 license
-4. 創建後執行上述步驟 3 和步驟 4
+1. 閮芸? https://github.com/new
+2. ?萄遣?啣澈嚗遣霅啣? `stock-accounting-system`嚗?3. **銝?**????README??gitignore ??license
+4. ?萄遣敺銵?餈唳郊撽?3 ?郊撽?4
 
-## 創建 GitHub Release
+## ?萄遣 GitHub Release
 
-推送標籤後，可以使用 GitHub CLI 創建 Release：
-
+?券?蝐文?嚗隞乩蝙??GitHub CLI ?萄遣 Release嚗?
 ```bash
-# 使用 PowerShell 執行
+# 雿輻 PowerShell ?瑁?
 .\create_release.ps1
 ```
 
-或者通過 GitHub Web 界面創建 Release（參考 GITHUB_RELEASE_GUIDE.md）。
-
-## 驗證推送
-
-推送成功後，您可以：
-- 在 GitHub 上查看代碼
-- 在 Releases 頁面查看版本標籤 vS0002-1
-- 查看提交歷史和更新說明
-
+?? GitHub Web ??萄遣 Release嚗???GITHUB_RELEASE_GUIDE.md嚗?
+## 撽??券?
+?券???嚗?臭誑嚗?- ??GitHub 銝?誨蝣?- ??Releases ??亦??璅惜 vS0002-1
+- ?亦??漱甇瑕??啗牧??
 
 
 

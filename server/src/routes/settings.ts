@@ -946,6 +946,198 @@ router.get('/exchange-rates', async (req: AuthRequest, res) => {
   }
 });
 
+// ========== 語言包管理 API ==========
+
+// 獲取語言包列表
+router.get('/language-packs', async (req: AuthRequest, res) => {
+  try {
+    const packs = await all<any>(
+      'SELECT id, language_code, language_name, is_default, created_at, updated_at FROM language_packs WHERE user_id = ? ORDER BY is_default DESC, language_code ASC',
+      [req.userId]
+    );
+
+    res.json({
+      success: true,
+      data: packs,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message || '獲取語言包列表失敗',
+    });
+  }
+});
+
+// 獲取指定語言包
+router.get('/language-packs/:code', async (req: AuthRequest, res) => {
+  try {
+    const { code } = req.params;
+    const pack: any = await get<any>(
+      'SELECT * FROM language_packs WHERE user_id = ? AND language_code = ?',
+      [req.userId, code]
+    );
+
+    if (!pack) {
+      return res.status(404).json({
+        success: false,
+        message: '語言包不存在',
+      });
+    }
+
+    // 解析 translations JSON
+    let translations = {};
+    try {
+      translations = JSON.parse(pack.translations);
+    } catch (e) {
+      translations = {};
+    }
+
+    res.json({
+      success: true,
+      data: {
+        ...pack,
+        translations,
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message || '獲取語言包失敗',
+    });
+  }
+});
+
+// 創建或更新語言包
+router.post('/language-packs', async (req: AuthRequest, res) => {
+  try {
+    const { language_code, language_name, translations, is_default } = req.body;
+
+    if (!language_code || !language_name || !translations) {
+      return res.status(400).json({
+        success: false,
+        message: '請提供語言代碼、語言名稱和翻譯內容',
+      });
+    }
+
+    // 驗證 translations 是對象
+    if (typeof translations !== 'object') {
+      return res.status(400).json({
+        success: false,
+        message: '翻譯內容必須是 JSON 對象',
+      });
+    }
+
+    // 如果設為預設，先取消其他語言包的預設狀態
+    if (is_default) {
+      await run(
+        'UPDATE language_packs SET is_default = 0 WHERE user_id = ?',
+        [req.userId]
+      );
+    }
+
+    // 檢查是否已存在
+    const existing: any = await get<any>(
+      'SELECT * FROM language_packs WHERE user_id = ? AND language_code = ?',
+      [req.userId, language_code]
+    );
+
+    const translationsStr = JSON.stringify(translations);
+
+    if (existing) {
+      await run(
+        'UPDATE language_packs SET language_name = ?, translations = ?, is_default = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [language_name, translationsStr, is_default ? 1 : 0, existing.id]
+      );
+    } else {
+      await run(
+        'INSERT INTO language_packs (user_id, language_code, language_name, translations, is_default) VALUES (?, ?, ?, ?, ?)',
+        [req.userId, language_code, language_name, translationsStr, is_default ? 1 : 0]
+      );
+    }
+
+    res.json({
+      success: true,
+      message: '語言包保存成功',
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message || '保存語言包失敗',
+    });
+  }
+});
+
+// 刪除語言包
+router.delete('/language-packs/:code', async (req: AuthRequest, res) => {
+  try {
+    const { code } = req.params;
+
+    // 檢查是否為預設語言包
+    const pack: any = await get<any>(
+      'SELECT is_default FROM language_packs WHERE user_id = ? AND language_code = ?',
+      [req.userId, code]
+    );
+
+    if (!pack) {
+      return res.status(404).json({
+        success: false,
+        message: '語言包不存在',
+      });
+    }
+
+    await run(
+      'DELETE FROM language_packs WHERE user_id = ? AND language_code = ?',
+      [req.userId, code]
+    );
+
+    res.json({
+      success: true,
+      message: '語言包刪除成功',
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message || '刪除語言包失敗',
+    });
+  }
+});
+
+// 設置預設語言包
+router.put('/language-packs/:code/default', async (req: AuthRequest, res) => {
+  try {
+    const { code } = req.params;
+
+    // 先取消所有語言包的預設狀態
+    await run(
+      'UPDATE language_packs SET is_default = 0 WHERE user_id = ?',
+      [req.userId]
+    );
+
+    // 設置指定語言包為預設
+    const result = await run(
+      'UPDATE language_packs SET is_default = 1, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND language_code = ?',
+      [req.userId, code]
+    );
+
+    if (result.changes === 0) {
+      return res.status(404).json({
+        success: false,
+        message: '語言包不存在',
+      });
+    }
+
+    res.json({
+      success: true,
+      message: '預設語言包設置成功',
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message || '設置預設語言包失敗',
+    });
+  }
+});
+
 export default router;
 
 

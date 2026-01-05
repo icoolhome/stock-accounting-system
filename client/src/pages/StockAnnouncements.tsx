@@ -229,17 +229,16 @@ const StockAnnouncements = () => {
 
   // 選擇股票並載入詳細資訊（未使用，保留備用）
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  // @ts-ignore - 備用函數，暫時未使用
   const _handleSelectStock = async (_stock: StockInfo) => {
-    setSelectedStock(_stock);
-    setSearchKeyword(`${_stock.stock_code} ${_stock.stock_name}`);
+    setSelectedStock(stock);
+    setSearchKeyword(`${stock.stock_code} ${stock.stock_name}`);
     setSearchResults([]);
     setSearchPerformed(false); // 隱藏搜尋結果列表
     
     // 載入股票詳細資訊
     try {
       setLoadingDetail(true);
-      const response = await axios.get(`/api/stocks/${_stock.stock_code}/detail`);
+      const response = await axios.get(`/api/stocks/${stock.stock_code}/detail`);
       if (response.data.success) {
         setStockDetail(response.data.data);
       }
@@ -247,7 +246,7 @@ const StockAnnouncements = () => {
       console.error('載入股票詳細資訊失敗:', err);
       // 即使失敗也顯示基本信息
       setStockDetail({
-        stockInfo: _stock,
+        stockInfo: stock,
         priceInfo: null,
         dividends: [],
         dividendStats: {
@@ -267,6 +266,7 @@ const StockAnnouncements = () => {
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-800">個股查詢</h1>
+        <p className="text-sm text-gray-500">資料來源：<span className="font-medium text-blue-600">Win 投資</span></p>
       </div>
 
       {/* 初始使用提示（簡化版，導向新頁面） */}
@@ -311,7 +311,7 @@ const StockAnnouncements = () => {
           <label className="block text-sm font-medium text-gray-700 mb-2">
             股票代號或名稱
           </label>
-          <div className="relative w-full max-w-md">
+          <div className="relative" style={{ width: '50%' }}>
             <input
               type="text"
               value={searchKeyword}
@@ -320,11 +320,6 @@ const StockAnnouncements = () => {
               placeholder="請輸入股票代號（如：2330）或股票名稱（如：台積電）"
               className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
-            <div className="text-right mt-1">
-              <span className="text-sm text-gray-500">
-                資料來源：<span className="font-medium text-blue-600">Win 投資</span>
-              </span>
-            </div>
             {searchKeyword && (
               <button
                 onClick={() => setSearchKeyword('')}
@@ -422,7 +417,7 @@ const StockAnnouncements = () => {
           </div>
         )}
 
-        <div className="flex items-center justify-start gap-3" style={{ width: '100%', maxWidth: '28rem' }}>
+        <div className="flex items-center justify-end gap-3">
           <button
             onClick={handleClear}
             className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
@@ -441,7 +436,7 @@ const StockAnnouncements = () => {
 
 
       {/* 搜尋結果（只有在有多筆結果且未選擇股票時才顯示列表） */}
-      {searchPerformed && (searchResults as StockInfo[]).length > 1 && !selectedStock && !loadingDetail && (
+      {searchPerformed && searchResults.length > 1 && !selectedStock && !loadingDetail && (
         <div className="bg-white shadow rounded-lg p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-800">
@@ -483,15 +478,12 @@ const StockAnnouncements = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {searchResults.map((stock, index) => {
-                    const stockCode = stock.stock_code;
-                    // @ts-expect-error - TypeScript inference issue with conditional rendering
-                    const selectedStockCode = selectedStock?.stock_code;
-                    const isSelected = selectedStockCode === stockCode;
-                    return (
+                  {searchResults.map((stock, index) => (
                     <tr
                       key={`${stock.stock_code}_${index}`}
-                      className={`hover:bg-gray-50 ${isSelected ? 'bg-blue-50' : ''}`}
+                      className={`hover:bg-gray-50 ${
+                        selectedStock?.stock_code === stock.stock_code ? 'bg-blue-50' : ''
+                      }`}
                     >
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
                         {stock.stock_code}
@@ -520,8 +512,7 @@ const StockAnnouncements = () => {
                         </button>
                       </td>
                     </tr>
-                    );
-                  })}
+                  ))}
                 </tbody>
               </table>
             </div>

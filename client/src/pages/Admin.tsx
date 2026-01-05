@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLanguage } from '../contexts/LanguageContext';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import * as XLSX from 'xlsx';
@@ -36,6 +37,7 @@ interface SystemLog {
 }
 
 const Admin = () => {
+  const { t } = useLanguage();
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('users');
   const [loading, setLoading] = useState(false);
@@ -107,18 +109,18 @@ const Admin = () => {
   };
 
   const handleDeleteUser = async (userId: number) => {
-    if (!window.confirm('確定要刪除該用戶嗎？')) {
+    if (!window.confirm(t('admin.confirmDeleteUser', '確定要刪除該用戶嗎？'))) {
       return;
     }
 
     try {
       await axios.delete(`/api/admin/users/${userId}`);
-      setSuccess('用戶已刪除');
+      setSuccess(t('admin.userDeleted', '用戶已刪除'));
       fetchUsers();
       fetchUserStats();
       setTimeout(() => setSuccess(''), 3000);
     } catch (err: any) {
-      setError(err.response?.data?.message || '刪除用戶失敗');
+      setError(err.response?.data?.message || t('admin.deleteUserFailed', '刪除用戶失敗'));
       setTimeout(() => setError(''), 3000);
     }
   };
@@ -146,7 +148,7 @@ const Admin = () => {
     try {
       setLoading(true);
       await axios.post('/api/admin/admin/create', newAdmin);
-      setSuccess('管理員已創建');
+      setSuccess(t('admin.adminCreated', '管理員已創建'));
       setShowAddAdminModal(false);
       setNewAdmin({ email: '', password: '' });
       fetchAdmins();
@@ -160,7 +162,7 @@ const Admin = () => {
   };
 
   const handleEditAdmin = (admin: Admin) => {
-    if (!window.confirm('確定要編輯該管理員嗎？')) {
+    if (!window.confirm(t('admin.confirmEditAdmin', '確定要編輯該管理員嗎？'))) {
       return;
     }
     setEditingAdmin(admin);
@@ -182,7 +184,7 @@ const Admin = () => {
         updateData.password = editAdmin.password.trim();
       }
       await axios.put(`/api/admin/admin/${editingAdmin.id}`, updateData);
-      setSuccess('管理員已更新');
+      setSuccess(t('admin.adminUpdated', '管理員已更新'));
       setShowEditAdminModal(false);
       setEditingAdmin(null);
       setEditAdmin({ email: '', password: '' });
@@ -208,7 +210,7 @@ const Admin = () => {
         updateData.password = updateAdminForm.password.trim();
       }
       await axios.put('/api/admin/admin/current', updateData);
-      setSuccess('設定已更新，請重新登入');
+      setSuccess(t('admin.settingsUpdatedRelogin', '設定已更新，請重新登入'));
       setUpdateAdminForm({ email: '', password: '' });
       setTimeout(() => {
         setSuccess('');
@@ -230,7 +232,7 @@ const Admin = () => {
       setLoading(true);
       const response = await axios.post('/api/admin/diagnostics');
       setDiagnostics(response.data.data);
-      setSuccess('系統診斷完成');
+      setSuccess(t('admin.diagnosticsCompleted', '系統診斷完成'));
       fetchLogs();
       setTimeout(() => setSuccess(''), 3000);
     } catch (err: any) {
@@ -257,17 +259,17 @@ const Admin = () => {
   };
 
   const handleDeleteLog = async (logId: number) => {
-    if (!window.confirm('確定要刪除該日誌嗎？')) {
+    if (!window.confirm(t('admin.confirmDeleteLog', '確定要刪除該日誌嗎？'))) {
       return;
     }
 
     try {
       await axios.delete(`/api/admin/logs/${logId}`);
-      setSuccess('日誌已刪除');
+      setSuccess(t('admin.logDeleted', '日誌已刪除'));
       fetchLogs();
       setTimeout(() => setSuccess(''), 3000);
     } catch (err: any) {
-      setError(err.response?.data?.message || '刪除日誌失敗');
+      setError(err.response?.data?.message || t('admin.deleteLogFailed', '刪除日誌失敗'));
       setTimeout(() => setError(''), 3000);
     }
   };
@@ -329,17 +331,17 @@ const Admin = () => {
       ws['!cols'] = colWidths;
 
       // 添加工作表到工作簿
-      XLSX.utils.book_append_sheet(wb, ws, '系統日誌');
+      XLSX.utils.book_append_sheet(wb, ws, t('admin.systemLogsSheet', '系統日誌'));
 
       // 生成文件名（包含日期）
-      const fileName = `系統日誌_${format(new Date(), 'yyyy-MM-dd_HHmmss')}.xlsx`;
+      const fileName = `${t('admin.systemLogsFileName', '系統日誌')}_${format(new Date(), 'yyyy-MM-dd_HHmmss')}.xlsx`;
 
       // 下載文件
       XLSX.writeFile(wb, fileName);
-      setSuccess('日誌匯出成功');
+      setSuccess(t('admin.exportLogsSuccess', '日誌匯出成功'));
       setTimeout(() => setSuccess(''), 3000);
     } catch (err: any) {
-      setError(err.response?.data?.message || '匯出日誌失敗');
+      setError(err.response?.data?.message || t('admin.exportLogsFailed', '匯出日誌失敗'));
       setTimeout(() => setError(''), 3000);
     } finally {
       setLoading(false);
@@ -349,22 +351,22 @@ const Admin = () => {
   // 刪除全部業務數據（不含用戶與管理員帳號）
   const handlePurgeAllData = async () => {
     const first = window.confirm(
-      '此操作將刪除所有交易、庫存、交割、股息、銀行帳戶、幣別設定、系統日誌與證交所除權除息資料，且無法復原。確定要繼續嗎？'
+      t('admin.confirmPurgeAllData', '此操作將刪除所有交易、庫存、交割、股息、銀行帳戶、幣別設定、系統日誌與證交所除權除息資料，且無法復原。確定要繼續嗎？')
     );
     if (!first) return;
-    const second = window.confirm('再次確認：確定要刪除全部業務數據嗎？此動作無法還原，請謹慎操作。');
+    const second = window.confirm(t('admin.confirmPurgeAllDataSecond', '再次確認：確定要刪除全部業務數據嗎？此動作無法還原，請謹慎操作。'));
     if (!second) return;
 
     try {
       setPurging(true);
       const response = await axios.post('/api/admin/purge');
-      setSuccess(response.data?.message || '已刪除全部業務數據');
+      setSuccess(response.data?.message || t('admin.allDataPurged', '已刪除全部業務數據'));
       // 重新載入基本統計與日誌
       fetchUserStats();
       fetchUsers();
       fetchLogs();
     } catch (err: any) {
-      setError(err.response?.data?.message || '刪除全部數據失敗');
+      setError(err.response?.data?.message || t('admin.purgeAllDataFailed', '刪除全部數據失敗'));
     } finally {
       setPurging(false);
       setTimeout(() => {
@@ -401,7 +403,7 @@ const Admin = () => {
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold text-gray-800 mb-6">後台管理</h1>
+      <h1 className="text-2xl font-bold text-gray-900">{t('admin.title', '後台管理')}</h1>
 
       {error && (
         <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
@@ -465,7 +467,7 @@ const Admin = () => {
               <div className="text-2xl font-bold text-gray-800">{userStats.activeUsers}</div>
             </div>
             <div className="bg-white p-4 rounded-lg shadow">
-              <div className="text-sm text-gray-500">今日新增</div>
+              <div className="text-sm text-gray-500">{t('admin.todayNew', '今日新增')}</div>
               <div className="text-2xl font-bold text-gray-800">{userStats.todayNewUsers}</div>
             </div>
           </div>
@@ -513,7 +515,7 @@ const Admin = () => {
                 {loading ? (
                   <tr>
                     <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
-                      載入中...
+                      {t('common.loading', '載入中...')}
                     </td>
                   </tr>
                 ) : users.length === 0 ? (
@@ -746,7 +748,7 @@ const Admin = () => {
           {showAddAdminModal && (
             <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
               <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-                <h3 className="text-lg font-bold text-gray-900 mb-4">新增管理員</h3>
+                <h3 className="text-lg font-bold text-gray-900 mb-4">{t('admin.addAdmin', '新增管理員')}</h3>
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">郵箱</label>
@@ -773,16 +775,16 @@ const Admin = () => {
                         setNewAdmin({ email: '', password: '' });
                       }}
                       className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
-                    >
-                      取消
-                    </button>
-                    <button
-                      onClick={handleAddAdmin}
-                      disabled={loading || !newAdmin.email || !newAdmin.password}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
-                    >
-                      新增
-                    </button>
+                      >
+                        {t('common.cancel', '取消')}
+                      </button>
+                      <button
+                        onClick={handleAddAdmin}
+                        disabled={loading || !newAdmin.email || !newAdmin.password}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        {t('common.add', '新增')}
+                      </button>
                   </div>
                 </div>
               </div>
@@ -793,7 +795,7 @@ const Admin = () => {
           {showEditAdminModal && editingAdmin && (
             <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
               <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-                <h3 className="text-lg font-bold text-gray-900 mb-4">編輯管理員</h3>
+                <h3 className="text-lg font-bold text-gray-900 mb-4">{t('admin.editAdmin', '編輯管理員')}</h3>
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">

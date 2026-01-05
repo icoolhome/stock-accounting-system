@@ -1,59 +1,62 @@
-@echo off
+﻿@echo off
 echo ========================================
 echo   Debug Start.bat
 echo ========================================
 echo.
 
-echo 當前目錄: %CD%
-echo 腳本目錄: %~dp0
+echo ?嗅??桅?: %CD%
+echo ?單?桅?: %~dp0
 echo.
 
 cd /d "%~dp0"
-echo 切換後目錄: %CD%
+echo ??敺?? %CD%
 echo.
 
-echo 檢查 server\dist\index.js...
+echo 瑼Ｘ server\dist\index.js...
 if exist "server\dist\index.js" (
-    echo [OK] server\dist\index.js 存在
+    echo [OK] server\dist\index.js 摮
 ) else (
-    echo [X] server\dist\index.js 不存在
+    echo [X] server\dist\index.js 銝???
 )
 echo.
 
-echo 檢查 client\dist...
+echo 瑼Ｘ client\dist...
 if exist "client\dist" (
-    echo [OK] client\dist 存在
+    echo [OK] client\dist 摮
 ) else (
-    echo [X] client\dist 不存在
+    echo [X] client\dist 銝???
 )
 echo.
 
-echo 檢查 Node.js...
+echo 瑼Ｘ Node.js...
 where node >nul 2>&1
 if errorlevel 1 (
-    echo [X] Node.js 未安裝
+    echo [X] Node.js ?芸?鋆?
 ) else (
-    echo [OK] Node.js 已安裝
+    echo [OK] Node.js 撌脣?鋆?
     node --version
 )
 echo.
 
-echo 檢查 server\package.json...
+echo 瑼Ｘ server\package.json...
 if exist "server\package.json" (
-    echo [OK] server\package.json 存在
+    echo [OK] server\package.json 摮
 ) else (
-    echo [X] server\package.json 不存在
+    echo [X] server\package.json 銝???
 )
 echo.
 
-echo 檢查 client\package.json...
+echo 瑼Ｘ client\package.json...
 if exist "client\package.json" (
-    echo [OK] client\package.json 存在
+    echo [OK] client\package.json 摮
 ) else (
-    echo [X] client\package.json 不存在
+    echo [X] client\package.json 銝???
 )
 echo.
 
 pause
+
+
+
 
 

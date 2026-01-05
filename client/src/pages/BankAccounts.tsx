@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLanguage } from '../contexts/LanguageContext';
 import axios from 'axios';
 import { format, addDays, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, subMonths, subYears } from 'date-fns';
 import * as XLSX from 'xlsx';
@@ -42,9 +43,16 @@ interface BankTransaction {
   withdrawal_amount: number;
 }
 
-const ACCOUNT_TYPES = ['儲蓄帳戶', '支票帳戶', '投資帳戶', '信用卡帳戶', '其他帳戶'];
-
 const BankAccounts = () => {
+  const { t } = useLanguage();
+  
+  const ACCOUNT_TYPES = [
+    t('account.type.savings', '儲蓄帳戶'),
+    t('account.type.checking', '支票帳戶'),
+    t('account.type.investment', '投資帳戶'),
+    t('account.type.credit', '信用卡帳戶'),
+    t('account.type.other', '其他帳戶')
+  ];
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
   const [securitiesAccounts, setSecuritiesAccounts] = useState<SecuritiesAccount[]>([]);
   const [currencies, setCurrencies] = useState<Currency[]>([]);
@@ -75,7 +83,7 @@ const BankAccounts = () => {
     securities_account_id: '',
     bank_name: '',
     account_number: '',
-    account_type: '儲蓄帳戶',
+    account_type: t('account.type.savings', '儲蓄帳戶'),
     balance: '' as number | '',
     currency: 'TWD', // 將在 fetchCurrencies 後更新
   });
@@ -226,7 +234,7 @@ const BankAccounts = () => {
         setFormData(prev => ({ ...prev, currency: defaultCurrency.currency_code }));
       }
     } catch (err: any) {
-      console.error('獲取幣別設定失敗:', err);
+      console.error(t('bankAccount.fetchCurrencySettingsFailed', '獲取幣別設定失敗'), err);
     }
   };
 
@@ -235,7 +243,7 @@ const BankAccounts = () => {
       const response = await axios.get('/api/securities-accounts');
       setSecuritiesAccounts(response.data.data);
     } catch (err: any) {
-      console.error('獲取證券帳戶失敗:', err);
+      console.error(t('bankAccount.fetchSecuritiesAccountFailed', '獲取證券帳戶失敗'), err);
     }
   };
 
@@ -245,7 +253,7 @@ const BankAccounts = () => {
       const response = await axios.get('/api/bank-accounts');
       setAccounts(response.data.data);
     } catch (err: any) {
-      setError(err.response?.data?.message || '獲取銀行帳戶失敗');
+      setError(err.response?.data?.message || t('error.fetchFailed', '獲取銀行帳戶失敗'));
     } finally {
       setLoading(false);
     }
@@ -272,7 +280,7 @@ const BankAccounts = () => {
       resetForm();
       fetchAccounts();
     } catch (err: any) {
-      setError(err.response?.data?.message || '操作失敗');
+      setError(err.response?.data?.message || t('bankAccount.operationFailed', '操作失敗'));
     }
   };
 
@@ -297,7 +305,7 @@ const BankAccounts = () => {
       setDeleteConfirm(null);
       fetchAccounts();
     } catch (err: any) {
-      setError(err.response?.data?.message || '刪除失敗');
+      setError(err.response?.data?.message || t('bankAccount.deleteFailed', '刪除失敗'));
     }
   };
 
@@ -387,7 +395,7 @@ const BankAccounts = () => {
       securities_account_id: '',
       bank_name: '',
       account_number: '',
-      account_type: '儲蓄帳戶',
+      account_type: t('account.type.savings', '儲蓄帳戶'),
       balance: '' as number | '',
       currency: defaultCurrency?.currency_code || 'TWD',
     });
@@ -410,7 +418,7 @@ const BankAccounts = () => {
       const response = await axios.get('/api/bank-transactions', { params });
       setBankTransactions(response.data.data || []);
     } catch (err: any) {
-      console.error('獲取銀行明細失敗:', err);
+      console.error(t('bankAccount.fetchBankTransactionsFailed', '獲取銀行明細失敗'), err);
     }
   };
 
@@ -545,14 +553,14 @@ const BankAccounts = () => {
   const [selectedBankTransactionId, setSelectedBankTransactionId] = useState<number | null>(null);
 
   if (loading && accounts.length === 0) {
-    return <div className="text-center py-8">載入中...</div>;
+    return <div className="text-center py-8">{t('common.loading', '載入中...')}</div>;
   }
 
   return (
     <div className="px-4 py-6 sm:px-0">
       <div className="bg-white shadow rounded-lg p-6">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">銀行帳戶管理</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t('bankAccounts.title', '銀行帳戶管理')}</h1>
           <button
             onClick={() => {
               resetForm();

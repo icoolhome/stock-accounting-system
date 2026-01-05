@@ -1,4 +1,4 @@
-@echo off
+﻿@echo off
 chcp 65001 >nul 2>&1
 echo ========================================
 echo   Check Backend Server Status
@@ -53,5 +53,8 @@ if errorlevel 1 (
 
 pause
 exit /b 0
+
+
+
 
 

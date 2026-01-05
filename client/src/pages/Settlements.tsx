@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLanguage } from '../contexts/LanguageContext';
 import axios from 'axios';
 import { format } from 'date-fns';
 import * as XLSX from 'xlsx';
@@ -48,6 +49,7 @@ interface Settlement {
 }
 
 const Settlements = () => {
+  const { t } = useLanguage();
   const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -74,7 +76,7 @@ const Settlements = () => {
     trade_date: '',
     settlement_amount: '' as number | '',
     twd_amount: '' as number | '',
-    status: '未交割',
+    status: t('settlement.status.pending', '未交割'),
     notes: '',
   });
 
@@ -113,7 +115,7 @@ const Settlements = () => {
       settlementDate.setHours(0, 0, 0, 0);
       
       // 如果交割日期是今天或過去，狀態設為「已交割」；否則設為「未交割」
-      const autoStatus = settlementDate <= today ? '已交割' : '未交割';
+      const autoStatus = settlementDate <= today ? t('settlement.status.completed', '已交割') : t('settlement.status.pending', '未交割');
       
       setFormData(prev => ({
         ...prev,
@@ -155,7 +157,7 @@ const Settlements = () => {
         setStats(response.data.stats);
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || '獲取交割記錄失敗');
+      setError(err.response?.data?.message || t('error.fetchFailed', '獲取交割記錄失敗'));
     } finally {
       setLoading(false);
     }
@@ -185,7 +187,7 @@ const Settlements = () => {
       resetForm();
       fetchSettlements();
     } catch (err: any) {
-      setError(err.response?.data?.message || '操作失敗');
+      setError(err.response?.data?.message || t('error.operationFailed', '操作失敗'));
     }
   };
 
@@ -208,11 +210,11 @@ const Settlements = () => {
       }
       
       // 轉換舊的狀態值為新的狀態值（向後兼容）
-      let status = settlement.status || '未交割';
+      let status = settlement.status || t('settlement.status.pending', '未交割');
       if (status === '待處理') {
-        status = '未交割';
+        status = t('settlement.status.pending', '未交割');
       } else if (status === '已完成') {
-        status = '已交割';
+        status = t('settlement.status.completed', '已交割');
       }
       
       setFormData({
@@ -240,7 +242,7 @@ const Settlements = () => {
       setDeleteConfirm(null);
       fetchSettlements();
     } catch (err: any) {
-      setError(err.response?.data?.message || '刪除失敗');
+      setError(err.response?.data?.message || t('error.deleteFailed', '刪除失敗'));
     }
   };
 
@@ -292,7 +294,7 @@ const Settlements = () => {
       trade_date: '',
       settlement_amount: '' as number | '',
       twd_amount: '' as number | '',
-      status: '未交割',
+      status: t('settlement.status.pending', '未交割'),
       notes: '',
     });
     setShowTransactionDetail(false);
@@ -398,14 +400,14 @@ const Settlements = () => {
   };
 
   if (loading && settlements.length === 0) {
-    return <div className="text-center py-8">載入中...</div>;
+    return <div className="text-center py-8">{t('common.loading', '載入中...')}</div>;
   }
 
   return (
     <div className="px-4 py-6 sm:px-0">
       <div className="bg-white shadow rounded-lg p-6">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">交割管理</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t('settlements.title', '交割管理')}</h1>
           <div className="flex items-center gap-3">
             <button
               onClick={exportToExcel}
@@ -451,7 +453,7 @@ const Settlements = () => {
             </p>
           </div>
           <div className="bg-green-50 p-4 rounded-lg">
-            <h3 className="text-sm font-medium text-gray-600">已交割</h3>
+            <h3 className="text-sm font-medium text-gray-600">{t('settlement.status.completed', '已交割')}</h3>
             <p className="text-2xl font-bold text-gray-900">
               ${stats.completedAmount.toFixed(2)}
             </p>
@@ -595,8 +597,8 @@ const Settlements = () => {
               className="w-full px-3 py-2 border border-gray-300 rounded-md"
             >
               <option value="">全部</option>
-              <option value="未交割">未交割</option>
-              <option value="已交割">已交割</option>
+              <option value={t('settlement.status.pending', '未交割')}>{t('settlement.status.pending', '未交割')}</option>
+              <option value={t('settlement.status.completed', '已交割')}>{t('settlement.status.completed', '已交割')}</option>
               <option value="失敗">失敗</option>
             </select>
           </div>
@@ -698,7 +700,7 @@ const Settlements = () => {
                         <td className="px-4 py-4 whitespace-nowrap text-sm">
                           <span
                             className={`px-2 py-1 rounded-full text-xs ${
-                              settlement.status === '已交割'
+                              settlement.status === t('settlement.status.completed', '已交割')
                                 ? 'bg-green-100 text-green-800'
                                 : settlement.status === '失敗'
                                 ? 'bg-red-100 text-red-800'
@@ -1160,9 +1162,9 @@ const Settlements = () => {
                       onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md"
                     >
-                      <option value="未交割">未交割</option>
-                      <option value="已交割">已交割</option>
-                      <option value="失敗">失敗</option>
+                      <option value={t('settlement.status.pending', '未交割')}>{t('settlement.status.pending', '未交割')}</option>
+                      <option value={t('settlement.status.completed', '已交割')}>{t('settlement.status.completed', '已交割')}</option>
+                      <option value={t('common.error', '失敗')}>{t('common.error', '失敗')}</option>
                     </select>
                   </div>
                   

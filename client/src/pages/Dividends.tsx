@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLanguage } from '../contexts/LanguageContext';
 import axios from 'axios';
 import { format } from 'date-fns';
 
@@ -18,6 +19,7 @@ interface Dividend {
 }
 
 const Dividends = () => {
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'history' | 'twse'>('history');
   const [dividends, setDividends] = useState<Dividend[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,7 +88,7 @@ const Dividends = () => {
   const [filters, setFilters] = useState({
     startDate: '',
     endDate: '',
-    incomeType: '全部',
+    incomeType: t('dividends.all', '全部'),
     stockCode: '',
   });
   const [currentPage, setCurrentPage] = useState(1);
@@ -291,7 +293,7 @@ const Dividends = () => {
   );
 
   if (loading && dividends.length === 0) {
-    return <div className="text-center py-8">載入中...</div>;
+    return <div className="text-center py-8">{t('common.loading', '載入中...')}</div>;
   }
 
   const handleExportDividendsExcel = () => {
@@ -305,7 +307,7 @@ const Dividends = () => {
     setTwseRecords([]);
 
     if (!filters.startDate || !filters.endDate) {
-      setTwseError('請先選擇開始日期與結束日期');
+      setTwseError(t('dividends.selectStartEndDate', '請先選擇開始日期與結束日期'));
       return;
     }
 
@@ -319,14 +321,14 @@ const Dividends = () => {
       });
 
       if (!response.data.success) {
-        setTwseError(response.data.message || '查詢失敗');
+        setTwseError(response.data.message || t('dividends.queryFailed', '查詢失敗'));
         return;
       }
 
       setTwseFields(response.data.fields || []);
       setTwseRecords(response.data.records || []);
     } catch (err: any) {
-      setTwseError(err.response?.data?.message || '查詢 TWSE 除權除息資料失敗');
+      setTwseError(err.response?.data?.message || t('dividends.queryTwseFailed', '查詢 TWSE 除權除息資料失敗'));
     } finally {
       setTwseLoading(false);
     }
@@ -336,7 +338,7 @@ const Dividends = () => {
     <div className="px-4 py-6 sm:px-0">
       <div className="bg-white shadow rounded-lg p-6">
         <div className="flex justify-between items-center mb-4">
-          <h1 className="text-2xl font-bold text-gray-900">歷史收益</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t('dividends.title', '歷史收益')}</h1>
         </div>
 
         {/* 標籤頁導航：歷史收益 / TWSE 除權除息查詢 */}
@@ -350,7 +352,7 @@ const Dividends = () => {
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              歷史收益記錄
+              {t('dividends.historyRecords', '歷史收益記錄')}
             </button>
             <button
               onClick={() => setActiveTab('twse')}
@@ -360,7 +362,7 @@ const Dividends = () => {
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              TWSE 除權除息查詢
+              {t('dividends.twseExrightsQuery', 'TWSE 除權除息查詢')}
             </button>
           </nav>
         </div>
@@ -373,7 +375,7 @@ const Dividends = () => {
                 type="button"
                 onClick={handleExportDividendsExcel}
                 className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2"
-                title="匯出歷史收益 Excel"
+                title={t('dividends.exportDividendsExcel', '匯出歷史收益 Excel')}
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -400,7 +402,7 @@ const Dividends = () => {
                 }}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium"
               >
-                新增收益記錄
+                {t('dividends.addDividendRecord', '新增收益記錄')}
               </button>
             </div>
 
@@ -743,7 +745,7 @@ const Dividends = () => {
               onMouseDown={handleModalMouseDown}
             >
               <h3 className="text-lg font-bold text-gray-900 mb-4 cursor-move">
-                {editingDividend ? '編輯收益記錄' : '新增收益記錄'}
+                {editingDividend ? t('dividends.editDividendRecord', '編輯收益記錄') : t('dividends.addDividendRecord', '新增收益記錄')}
               </h3>
               <form onSubmit={handleSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto">
                 <div className="grid grid-cols-2 gap-4">

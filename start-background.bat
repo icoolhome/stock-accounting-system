@@ -1,4 +1,4 @@
-@echo off
+﻿@echo off
 chcp 65001 >nul 2>&1
 echo ========================================
 echo   Stock Accounting System - Start (Background)
@@ -75,5 +75,8 @@ echo [OK] Services started!
 echo.
 pause
 exit /b 0
+
+
+
 
 

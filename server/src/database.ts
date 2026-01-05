@@ -270,6 +270,22 @@ export const initDatabase = async (): Promise<void> => {
     )
   `);
 
+  // 語言包表
+  await runNoParams(`
+    CREATE TABLE IF NOT EXISTS language_packs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      language_code TEXT NOT NULL,
+      language_name TEXT NOT NULL,
+      translations TEXT NOT NULL,
+      is_default INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      UNIQUE(user_id, language_code)
+    )
+  `);
+
   // 系統日誌表
   await runNoParams(`
     CREATE TABLE IF NOT EXISTS system_logs (
@@ -484,6 +500,14 @@ export const initDatabase = async (): Promise<void> => {
     await runNoParams(`CREATE INDEX IF NOT EXISTS idx_system_settings_user_key ON system_settings(user_id, setting_key)`);
   } catch (e: any) {
     console.warn('創建 system_settings 索引時發生錯誤:', e.message);
+  }
+
+  // language_packs 表索引
+  try {
+    await runNoParams(`CREATE INDEX IF NOT EXISTS idx_language_packs_user_id ON language_packs(user_id)`);
+    await runNoParams(`CREATE INDEX IF NOT EXISTS idx_language_packs_user_code ON language_packs(user_id, language_code)`);
+  } catch (e: any) {
+    console.warn('創建 language_packs 索引時發生錯誤:', e.message);
   }
 
   // income_types 表索引

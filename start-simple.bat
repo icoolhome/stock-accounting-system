@@ -1,20 +1,20 @@
-@echo off
+﻿@echo off
 chcp 65001 >nul 2>&1
 cls
 echo ========================================
-echo   股票記帳系統 - 啟動伺服器
+echo   ?∠巨閮董蝟餌絞 - ??隡箸???
 echo ========================================
 echo.
 
 cd /d "%~dp0"
 
-REM 檢查建置文件
+REM 瑼Ｘ撱箇蔭?辣
 if not exist "server\dist\index.js" (
-    echo [建置] 正在建置伺服器...
+    echo [撱箇蔭] 甇?撱箇蔭隡箸???..
     cd server
     call npm run build
     if errorlevel 1 (
-        echo [錯誤] 伺服器建置失敗
+        echo [?航炊] 隡箸??典遣蝵桀仃??
         pause
         exit /b 1
     )
@@ -22,11 +22,11 @@ if not exist "server\dist\index.js" (
 )
 
 if not exist "client\dist" (
-    echo [建置] 正在建置客戶端...
+    echo [撱箇蔭] 甇?撱箇蔭摰Ｘ蝡?..
     cd client
     call npm run build
     if errorlevel 1 (
-        echo [錯誤] 客戶端建置失敗
+        echo [?航炊] 摰Ｘ蝡臬遣蝵桀仃??
         pause
         exit /b 1
     )
@@ -34,35 +34,38 @@ if not exist "client\dist" (
 )
 
 echo.
-echo [啟動] 正在啟動服務器...
+echo [??] 甇???????..
 echo.
 
-REM 啟動後端
+REM ??敺垢
 cd server
-start "後端服務器" cmd /k "npm start"
+start "敺垢???? cmd /k "npm start"
 cd ..
 
 timeout /t 3 /nobreak >nul
 
-REM 啟動前端
+REM ???垢
 cd client
-start "前端服務器" cmd /k "npm run preview"
+start "?垢???? cmd /k "npm run preview"
 cd ..
 
 timeout /t 5 /nobreak >nul
 
-echo [開啟] 正在開啟瀏覽器...
+echo [??] 甇????汗??..
 start http://localhost:3000
 
 echo.
 echo ========================================
-echo   系統已啟動！
+echo   蝟餌絞撌脣???
 echo ========================================
 echo.
-echo 後端: http://localhost:3001
-echo 前端: http://localhost:3000
+echo 敺垢: http://localhost:3001
+echo ?垢: http://localhost:3000
 echo.
-echo 按任意鍵關閉此窗口
+echo ?遙???甇斤???
 pause >nul
+
+
+
 
 

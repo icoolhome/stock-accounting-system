@@ -1,76 +1,74 @@
-# GitHub Release 創建腳本
-# 使用方法：在 PowerShell 中執行 .\create_release.ps1
+﻿# GitHub Release ?萄遣?單
+# 雿輻?寞?嚗 PowerShell 銝剖銵?.\create_release.ps1
 
 $VERSION = "vS0002-1"
-$TITLE = "vS0002-1 - 性能優化與UI改進"
+$TITLE = "vS0002-1 - ?扯?芸??I?寥?
 
-Write-Host "正在創建 GitHub Release: $VERSION" -ForegroundColor Green
+Write-Host "甇??萄遣 GitHub Release: $VERSION" -ForegroundColor Green
 
-# 檢查 GitHub CLI 是否已安裝
-try {
+# 瑼Ｘ GitHub CLI ?臬撌脣?鋆?try {
     $null = Get-Command gh -ErrorAction Stop
-    Write-Host "[OK] GitHub CLI 已安裝" -ForegroundColor Green
+    Write-Host "[OK] GitHub CLI 撌脣?鋆? -ForegroundColor Green
 } catch {
-    Write-Host "[X] GitHub CLI 未安裝" -ForegroundColor Red
+    Write-Host "[X] GitHub CLI ?芸?鋆? -ForegroundColor Red
     Write-Host ""
-    Write-Host "請先安裝 GitHub CLI：" -ForegroundColor Yellow
-    Write-Host "1. 訪問: https://cli.github.com/" -ForegroundColor Cyan
-    Write-Host "2. 下載並安裝 Windows 版本" -ForegroundColor Cyan
-    Write-Host "3. 安裝後執行: gh auth login" -ForegroundColor Cyan
+    Write-Host "隢?摰? GitHub CLI嚗? -ForegroundColor Yellow
+    Write-Host "1. 閮芸?: https://cli.github.com/" -ForegroundColor Cyan
+    Write-Host "2. 銝?銝血?鋆?Windows ?" -ForegroundColor Cyan
+    Write-Host "3. 摰?敺銵? gh auth login" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "或者使用以下替代方案：" -ForegroundColor Yellow
-    Write-Host "- 方法一：通過 GitHub Web 界面創建（參考 GITHUB_RELEASE_GUIDE.md）" -ForegroundColor Cyan
-    Write-Host "- 方法二：使用 Git 標籤和手動上傳文件" -ForegroundColor Cyan
+    Write-Host "?蝙?其誑銝隞?獢?" -ForegroundColor Yellow
+    Write-Host "- ?寞?銝嚗? GitHub Web ??萄遣嚗???GITHUB_RELEASE_GUIDE.md嚗? -ForegroundColor Cyan
+    Write-Host "- ?寞?鈭?雿輻 Git 璅惜?????單?隞? -ForegroundColor Cyan
     exit 1
 }
 
-# 檢查是否已登錄
-Write-Host "檢查 GitHub CLI 登錄狀態..." -ForegroundColor Yellow
+# 瑼Ｘ?臬撌脩??Write-Host "瑼Ｘ GitHub CLI ?駁????.." -ForegroundColor Yellow
 try {
     gh auth status 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "[X] 未登錄 GitHub CLI" -ForegroundColor Red
-        Write-Host "請執行: gh auth login" -ForegroundColor Yellow
+        Write-Host "[X] ?芰??GitHub CLI" -ForegroundColor Red
+        Write-Host "隢銵? gh auth login" -ForegroundColor Yellow
         exit 1
     }
-    Write-Host "[OK] GitHub CLI 已登錄" -ForegroundColor Green
+    Write-Host "[OK] GitHub CLI 撌脩?? -ForegroundColor Green
 } catch {
-    Write-Host "[X] 無法檢查登錄狀態" -ForegroundColor Red
+    Write-Host "[X] ?⊥?瑼Ｘ?駁???? -ForegroundColor Red
     exit 1
 }
 
-# 檢查文件是否存在
+# 瑼Ｘ?辣?臬摮
 $files = @("RELEASE_NOTES.md", "CHANGELOG.md", "README_VERSION.md")
 $allExist = $true
 foreach ($file in $files) {
     if (Test-Path $file) {
-        Write-Host "[OK] 找到文件: $file" -ForegroundColor Green
+        Write-Host "[OK] ?曉?辣: $file" -ForegroundColor Green
     } else {
-        Write-Host "[X] 文件不存在: $file" -ForegroundColor Red
+        Write-Host "[X] ?辣銝??? $file" -ForegroundColor Red
         $allExist = $false
     }
 }
 
 if (-not $allExist) {
-    Write-Host "錯誤：部分文件缺失，無法創建 Release" -ForegroundColor Red
+    Write-Host "?航炊嚗??隞嗥撩憭梧??⊥??萄遣 Release" -ForegroundColor Red
     exit 1
 }
 
-# 檢查標籤是否存在
-Write-Host "檢查 Git 標籤..." -ForegroundColor Yellow
+# 瑼Ｘ璅惜?臬摮
+Write-Host "瑼Ｘ Git 璅惜..." -ForegroundColor Yellow
 $tagExists = git tag -l $VERSION
 if ($tagExists) {
-    Write-Host "[OK] 標籤 $VERSION 已存在" -ForegroundColor Green
+    Write-Host "[OK] 璅惜 $VERSION 撌脣??? -ForegroundColor Green
 } else {
-    Write-Host "[!] 標籤 $VERSION 不存在" -ForegroundColor Yellow
-    Write-Host "提示：標籤不存在時，GitHub CLI 會自動創建" -ForegroundColor Cyan
+    Write-Host "[!] 璅惜 $VERSION 銝??? -ForegroundColor Yellow
+    Write-Host "?內嚗?蝐支?摮??GitHub CLI ??撱? -ForegroundColor Cyan
 }
 
-# 創建 Release
+# ?萄遣 Release
 Write-Host ""
-Write-Host "正在創建 Release..." -ForegroundColor Yellow
-Write-Host "標籤: $VERSION" -ForegroundColor Cyan
-Write-Host "標題: $TITLE" -ForegroundColor Cyan
+Write-Host "甇??萄遣 Release..." -ForegroundColor Yellow
+Write-Host "璅惜: $VERSION" -ForegroundColor Cyan
+Write-Host "璅?: $TITLE" -ForegroundColor Cyan
 Write-Host ""
 
 try {
@@ -84,24 +82,24 @@ try {
     
     if ($LASTEXITCODE -eq 0) {
         Write-Host ""
-        Write-Host "[OK] Release 創建成功！" -ForegroundColor Green
+        Write-Host "[OK] Release ?萄遣??嚗? -ForegroundColor Green
         Write-Host ""
         
-        # 獲取倉庫信息
+        # ?脣??澈靽⊥
         $remoteUrl = git remote get-url origin 2>$null
         if ($remoteUrl) {
             if ($remoteUrl -match 'github.com[:/]([^/]+)/([^/]+?)(?:\.git)?$') {
                 $owner = $matches[1]
                 $repo = $matches[2] -replace '\.git$', ''
-                Write-Host "查看 Release: https://github.com/$owner/$repo/releases/tag/$VERSION" -ForegroundColor Cyan
+                Write-Host "?亦? Release: https://github.com/$owner/$repo/releases/tag/$VERSION" -ForegroundColor Cyan
             }
         }
     } else {
-        Write-Host "[X] Release 創建失敗" -ForegroundColor Red
+        Write-Host "[X] Release ?萄遣憭望?" -ForegroundColor Red
         exit 1
     }
 } catch {
     $errorMsg = $_.Exception.Message
-    Write-Host "[X] 發生錯誤: $errorMsg" -ForegroundColor Red
+    Write-Host "[X] ?潛??航炊: $errorMsg" -ForegroundColor Red
     exit 1
 }

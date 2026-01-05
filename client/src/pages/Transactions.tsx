@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLanguage } from '../contexts/LanguageContext';
 import axios from 'axios';
 import { format } from 'date-fns';
 import * as XLSX from 'xlsx';
@@ -46,18 +47,19 @@ interface Transaction {
   buy_reason?: string;
 }
 
-const TRANSACTION_TYPES = [
-  '普通買進',
-  '普通賣出',
-  '融資買進',
-  '融券賣出',
-  '融資賣出',
-  '融券買進',
-  '現股買進',
-  '現股賣出',
-];
-
 const Transactions = () => {
+  const { t } = useLanguage();
+  
+  const TRANSACTION_TYPES = [
+    t('transaction.type.normalBuy', '普通買進'),
+    t('transaction.type.normalSell', '普通賣出'),
+    t('transaction.type.marginBuy', '融資買進'),
+    t('transaction.type.shortSell', '融券賣出'),
+    t('transaction.type.marginSell', '融資賣出'),
+    t('transaction.type.shortBuy', '融券買進'),
+    t('transaction.type.cashBuy', '現股買進'),
+    t('transaction.type.cashSell', '現股賣出'),
+  ];
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<SecuritiesAccount[]>([]);
   const [currencies, setCurrencies] = useState<Currency[]>([]);
@@ -701,14 +703,14 @@ const Transactions = () => {
   };
 
   if (loading && transactions.length === 0) {
-    return <div className="text-center py-8">載入中...</div>;
+    return <div className="text-center py-8">{t('common.loading', '載入中...')}</div>;
   }
 
   return (
     <div className="py-6" style={{ fontSize: uiSettings.fontSize }}>
       <div className="bg-white shadow rounded-lg p-6">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">交易記錄</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t('transactions.title', '交易記錄')}</h1>
           <div className="flex items-center gap-3">
             <button
               onClick={exportToExcel}

@@ -1,8 +1,8 @@
-@echo off
+ï»¿@echo off
 setlocal enabledelayedexpansion
 chcp 936 >nul 2>&1
 echo ========================================
-echo   ¹ÉÆ±Ó›Ž¤Ïµ½y - †¢„Ó
+echo   å˜–ï›?î“ç‚µç·™ - ïˆ‰ï„€
 echo ========================================
 echo.
 
@@ -10,8 +10,8 @@ cd /d "%~dp0"
 
 where node >nul 2>&1
 if errorlevel 1 (
-    echo [åeÕ`] ÕÒ²»µ½ Node.js£¬Õˆ°²Ñb Node.js
-    echo ÏÂÝd¾WÖ·: https://nodejs.org/
+    echo [å¶’æ‚·] æ¢‘ç¥¥å–„ Node.jsã„›?å‡å¨Š Node.js
+    echo ç‹Ÿå¾­é‹’ç¡Š: https://nodejs.org/
     pause
     exit /b 1
 )
@@ -20,64 +20,64 @@ set NEED_BUILD_SERVER=0
 set NEED_BUILD_CLIENT=0
 
 if not exist "server\dist\index.js" (
-    echo [¾¯¸æ] ÕÒ²»µ½ server\dist\index.js£¬Œ¢ßMÐÐ½¨ÖÃ
+    echo [åŠ‘è±¢] æ¢‘ç¥¥å–„ server\dist\index.jsã„›ï–·ç­³ä¿´è†˜ç¦»
     set NEED_BUILD_SERVER=1
 )
 
 if not exist "client\dist" (
-    echo [¾¯¸æ] ÕÒ²»µ½ client\dist£¬Œ¢ßMÐÐ½¨ÖÃ
+    echo [åŠ‘è±¢] æ¢‘ç¥¥å–„ client\distã„›ï–·ç­³ä¿´è†˜ç¦»
     set NEED_BUILD_CLIENT=1
 )
 
 if !NEED_BUILD_SERVER! equ 1 (
-    echo [ÙYÓ] ½¨ÖÃËÅ·þÆ÷...
+    echo [æƒ?] è†˜ç¦»ä¾œç£ïœ‡...
     cd /d "%~dp0server"
     if not exist "package.json" (
-        echo [åeÕ`] ÕÒ²»µ½ server\package.json
+        echo [å¶’æ‚·] æ¢‘ç¥¥å–„ server\package.json
         cd /d "%~dp0"
         pause
         exit /b 1
     )
     call npm run build
     if errorlevel 1 (
-        echo [åeÕ`] ËÅ·þÆ÷½¨ÖÃÊ§”¡
+        echo [å¶’æ‚·] ä¾œç£ïœ‡è†˜ç¦»å›®î›¾
         cd /d "%~dp0"
         pause
         exit /b 1
     )
     cd /d "%~dp0"
-    echo [Íê³É] ËÅ·þÆ÷½¨ÖÃÍê³É
+    echo [ä¿‡å‚–] ä¾œç£ïœ‡è†˜ç¦»ä¿‡å‚–
 )
 
 if !NEED_BUILD_CLIENT! equ 1 (
-    echo [ÙYÓ] ½¨ÖÃ¿Í‘ô¶Ë...
+    echo [æƒ?] è†˜ç¦»è«¦î•ºå‚·...
     cd /d "%~dp0client"
     if not exist "package.json" (
-        echo [åeÕ`] ÕÒ²»µ½ client\package.json
+        echo [å¶’æ‚·] æ¢‘ç¥¥å–„ client\package.json
         cd /d "%~dp0"
         pause
         exit /b 1
     )
     call npm run build
     if errorlevel 1 (
-        echo [åeÕ`] ¿Í‘ô¶Ë½¨ÖÃÊ§”¡
+        echo [å¶’æ‚·] è«¦î•ºå‚·è†˜ç¦»å›®î›¾
         cd /d "%~dp0"
         pause
         exit /b 1
     )
     cd /d "%~dp0"
-    echo [Íê³É] ¿Í‘ô¶Ë½¨ÖÃÍê³É
+    echo [ä¿‡å‚–] è«¦î•ºå‚·è†˜ç¦»ä¿‡å‚–
 )
 
 echo.
 echo ========================================
-echo   ßx“ñß\ÐÐÄ£Ê½
+echo   è…¢îš±ç¶…ä¿´è€€å®’
 echo ========================================
-echo   1. Õý³£Ä£Ê½ (ÕûºÏÒ•´°)
-echo   2. ±³¾°Ä£Ê½ (ë[²ØÒ•´°)
+echo   1. æ·éƒ½è€€å®’ (æ·•ç£?æ•¦)
+echo   2. æŽ–åŠ“è€€å®’ (èž›ç´²?æ•¦)
 echo ========================================
 echo.
-set /p MODE="Õˆßx“ñÄ£Ê½ (1 »ò 2£¬îAÔOžé 1): "
+set /p MODE="?è…¢îš±è€€å®’ (1 éº¼ 2ã„›è•¼åžîµ¨ 1): "
 
 if "%MODE%"=="" set MODE=1
 if "%MODE%"=="2" goto background_mode
@@ -86,23 +86,23 @@ goto normal_mode
 
 :normal_mode
 echo.
-echo [ÙYÓ] ÒÔÕý³£Ä£Ê½†¢„Ó·þ„Õ£¨ÕûºÏÒ•´°£©...
-echo [ÙYÓ] ËÅ·þÆ÷: http://localhost:3001
-echo [ÙYÓ] ¿Í‘ô¶Ë: http://localhost:3000
+echo [æƒ?] çœ•æ·éƒ½è€€å®’ïˆ‰ï„€ç£ï„‚ã„—æ·•ç£?æ•¦ã„˜...
+echo [æƒ?] ä¾œç£ïœ‡: http://localhost:3001
+echo [æƒ?] è«¦î•ºå‚·: http://localhost:3000
 echo.
 echo ========================================
-echo   ÖØÒª: ÕˆÎðêPé]´ËÒ•´°£¡
+echo   ç¬­çŒ: ?æ˜¦ç‡Šå¯¯æ£®?æ•¦ã„
 echo   ========================================
-echo   ·þ„ÕÕýÔÚ´ËÒ•´°ÖÐß\ÐÐ¡£
-echo   Ê¹ÓÃ Ctrl+C ¿ÉÍ£Ö¹ËùÓÐ·þ„Õ¡£
+echo   ç£ï„‚æ·å©“æ£®?æ•¦ç¬¢ç¶…ä¿´ï¹
+echo   å¦èšš Ctrl+C è¤«ç¤¿ç ¦åž€è¡„ç£ï„‚ï¹
 echo ========================================
 echo.
 
 cd /d "%~dp0"
 
-REM Ê¹ÓÃ concurrently ÔÚÍ¬Ò»‚€´°¿ÚÖÐß\ÐÐËùÓÐ·þ„Õ
+REM å¦èšš concurrently å©“è‚®ç¨?æ•¦è«³ç¬¢ç¶…ä¿´åž€è¡„ç£ï„‚
 if exist "node_modules\concurrently\dist\bin\concurrently.js" (
-    REM „“½¨ÅR•rÅúÌŽÀíÎÄ¼þíÑÓßt´òé_žgÓ[Æ÷
+    REM ?è†˜éœ¹îžŽè ¶?ç‡´æ…ç’ƒî½ƒæ™Šè…·æ¹–å¶±î´ˆç½œïœ‡
     set OPEN_BROWSER=%TEMP%\open_browser_%RANDOM%.bat
     echo @echo off > "!OPEN_BROWSER!"
     echo timeout /t 10 /nobreak ^>nul 2^>^&1 >> "!OPEN_BROWSER!"
@@ -111,7 +111,7 @@ if exist "node_modules\concurrently\dist\bin\concurrently.js" (
     start "" "!OPEN_BROWSER!"
     call npm start
 ) else (
-    echo [åeÕ`] ÕÒ²»µ½ concurrently£¬ÕˆÏÈˆÌÐÐ: npm install
+    echo [å¶’æ‚·] æ¢‘ç¥¥å–„ concurrentlyã„›?ç‚ï­ä¿´: npm install
     pause
     exit /b 1
 )
@@ -120,9 +120,9 @@ exit /b 0
 
 :background_mode
 echo.
-echo [ÙYÓ] ÒÔ±³¾°Ä£Ê½†¢„Ó·þ„Õ...
-echo [ÙYÓ] ËÅ·þÆ÷: http://localhost:3001
-echo [ÙYÓ] ¿Í‘ô¶Ë: http://localhost:3000
+echo [æƒ?] çœ•æŽ–åŠ“è€€å®’ïˆ‰ï„€ç£ï„‚...
+echo [æƒ?] ä¾œç£ïœ‡: http://localhost:3001
+echo [æƒ?] è«¦î•ºå‚·: http://localhost:3000
 echo.
 
 set VBS_BACKEND=%TEMP%\start_backend_hidden.vbs
@@ -130,10 +130,10 @@ echo Set WshShell = CreateObject("WScript.Shell") > "!VBS_BACKEND!"
 echo WshShell.CurrentDirectory = "%~dp0server" >> "!VBS_BACKEND!"
 echo WshShell.Run "cmd /c npm start", 0, False >> "!VBS_BACKEND!"
 
-echo [ÙYÓ] ÕýÔÚ†¢„Óáá¶ËËÅ·þÆ÷...
+echo [æƒ?] æ·å©“ïˆ‰ï„€æ‘½å‚·ä¾œç£ïœ‡...
 cscript //nologo "!VBS_BACKEND!"
 
-echo [ÙYÓ] µÈ´ýáá¶ËËÅ·þÆ÷†¢„Ó...
+echo [æƒ?] è„¹æ¸¾æ‘½å‚·ä¾œç£ïœ‡ïˆ‰ï„€...
 timeout /t 5 /nobreak >nul
 
 :check_backend_bg
@@ -143,17 +143,17 @@ if errorlevel 1 (
     goto check_backend_bg
 )
 
-echo [Íê³É] áá¶ËËÅ·þÆ÷ÒÑ¾Í¾w
+echo [ä¿‡å‚–] æ‘½å‚·ä¾œç£ïœ‡çœ’æ†©é«¯
 
 set VBS_FRONTEND=%TEMP%\start_frontend_hidden.vbs
 echo Set WshShell = CreateObject("WScript.Shell") > "!VBS_FRONTEND!"
 echo WshShell.CurrentDirectory = "%~dp0" >> "!VBS_FRONTEND!"
 echo WshShell.Run "cmd /c npm run start:client", 0, False >> "!VBS_FRONTEND!"
 
-echo [ÙYÓ] ÕýÔÚ†¢„ÓÇ°¶ËËÅ·þÆ÷...
+echo [æƒ?] æ·å©“ïˆ‰ï„€ïå‚·ä¾œç£ïœ‡...
 cscript //nologo "!VBS_FRONTEND!"
 
-echo [ÙYÓ] µÈ´ýÇ°¶ËËÅ·þÆ÷†¢„Ó...
+echo [æƒ?] è„¹æ¸¾ïå‚·ä¾œç£ïœ‡ïˆ‰ï„€...
 timeout /t 8 /nobreak >nul
 
 :check_frontend_bg
@@ -163,20 +163,20 @@ if errorlevel 1 (
     goto check_frontend_bg
 )
 
-echo [Íê³É] Ç°¶ËËÅ·þÆ÷ÒÑ¾Í¾w
-echo [ÙYÓ] ÕýÔÚé_†¢žgÓ[Æ÷...
+echo [ä¿‡å‚–] ïå‚·ä¾œç£ïœ‡çœ’æ†©é«¯
+echo [æƒ?] æ·å©“å¶±ïˆ‰î´ˆç½œïœ‡...
 start http://localhost:3000
 
 del "!VBS_BACKEND!" >nul 2>&1
 del "!VBS_FRONTEND!" >nul 2>&1
 
 echo.
-echo [Íê³É] ·þ„ÕÒÑÒÔ±³¾°Ä£Ê½†¢„Ó¡£
-echo [ÙYÓ] ËÅ·þÆ÷ºÍ¿Í‘ô¶ËÕýÔÚë[²ØÒ•´°ÖÐß\ÐÐ¡£
-echo [ÙYÓ] ÒªÍ£Ö¹·þ„Õ£¬Äú¿ÉÒÔ£º
-echo       1. ˆÌÐÐ stop.bat
-echo       2. Ê¹ÓÃ¹¤×÷¹ÜÀí†T½YÊø node.exe ³ÌÐò
-echo       3. ÊÖ„ÓêPé]ë[²ØµÄÃüÁîÒ•´°
+echo [ä¿‡å‚–] ç£ï„‚çœ’çœ•æŽ–åŠ“è€€å®’ïˆ‰ï„€ï¹
+echo [æƒ?] ä¾œç£ïœ‡ç¿è«¦î•ºå‚·æ·å©“èž›ç´²?æ•¦ç¬¢ç¶…ä¿´ï¹
+echo [æƒ?] çŒç¤¿ç ¦ç£ï„‚ã„›è Ÿè¤«çœ•ã„©
+echo       1. ï­ä¿´ stop.bat
+echo       2. å¦èššé¦±é‡¬å¥ªç‡´ï‡ç£æ—° node.exe æœ€å”—
+echo       3. å¿’ï„€ç‡Šå¯¯èž›ç´²è…”éŸœé”?æ•¦
 echo.
 pause
 exit /b 0
