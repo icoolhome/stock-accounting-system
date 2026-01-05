@@ -316,7 +316,7 @@ async function main() {
       
       // Save VBS file paths for cleanup (optional)
       const vbsPathsFile = path.join(tempDir, 'stock_vbs_paths.txt');
-      vbs.writeFileSync(vbsPathsFile, `${serverVbs}\n${clientVbs}`, 'utf8');
+      fs.writeFileSync(vbsPathsFile, `${serverVbs}\n${clientVbs}`, 'utf8');
     } else {
       // Non-Windows: Use detached processes
       const serverProcess = startServer(mode);
