@@ -273,27 +273,67 @@ async function main() {
     
     return;
   } else {
-    // Background mode: Start services separately
-    const serverProcess = startServer(mode);
+    // Background mode: Start services separately using Windows VBS script to hide windows
+    logInfo('正在以後台模式啟動服務（隱藏視窗）...');
     
-    // Wait for server to be ready
-    try {
-      logInfo('等待伺服器啟動...');
-      await waitForServer(3001, 60);
-      logSuccess('伺服器已就緒');
-    } catch (error) {
-      logWarn('伺服器可能尚未就緒，但繼續執行...');
+    if (process.platform === 'win32') {
+      // Windows: Use VBS script to run in background
+      const vbs = require('fs');
+      const tempDir = require('os').tmpdir();
+      const serverVbs = path.join(tempDir, `start_backend_${Date.now()}.vbs`);
+      const clientVbs = path.join(tempDir, `start_frontend_${Date.now()}.vbs`);
+      
+      const serverDir = path.join(__dirname, 'server');
+      const clientDir = path.join(__dirname, 'client');
+      
+      // Create VBS script for server
+      const serverVbsContent = `Set WshShell = CreateObject("WScript.Shell")\nWshShell.CurrentDirectory = "${serverDir.replace(/\\/g, '\\\\')}"\nWshShell.Run "cmd /c npm start", 0, False`;
+      vbs.writeFileSync(serverVbs, serverVbsContent, 'utf8');
+      
+      // Create VBS script for client
+      const clientVbsContent = `Set WshShell = CreateObject("WScript.Shell")\nWshShell.CurrentDirectory = "${__dirname.replace(/\\/g, '\\\\')}"\nWshShell.Run "cmd /c npm run start:client", 0, False`;
+      vbs.writeFileSync(clientVbs, clientVbsContent, 'utf8');
+      
+      // Start server
+      logInfo('正在啟動後端伺服器（後台）...');
+      execSync(`cscript //nologo "${serverVbs}"`, { stdio: 'ignore' });
+      
+      // Wait for server to be ready
+      try {
+        logInfo('等待伺服器啟動...');
+        await waitForServer(3001, 60);
+        logSuccess('伺服器已就緒');
+      } catch (error) {
+        logWarn('伺服器可能尚未就緒，但繼續執行...');
+      }
+      
+      // Start client
+      logInfo('正在啟動前端客戶端（後台）...');
+      execSync(`cscript //nologo "${clientVbs}"`, { stdio: 'ignore' });
+      
+      // Wait a bit for client to start
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      // Save VBS file paths for cleanup (optional)
+      const vbsPathsFile = path.join(tempDir, 'stock_vbs_paths.txt');
+      vbs.writeFileSync(vbsPathsFile, `${serverVbs}\n${clientVbs}`, 'utf8');
+    } else {
+      // Non-Windows: Use detached processes
+      const serverProcess = startServer(mode);
+      
+      try {
+        logInfo('等待伺服器啟動...');
+        await waitForServer(3001, 60);
+        logSuccess('伺服器已就緒');
+      } catch (error) {
+        logWarn('伺服器可能尚未就緒，但繼續執行...');
+      }
+      
+      const clientProcess = startClient(mode);
+      await new Promise(resolve => setTimeout(resolve, 3000));
     }
     
-    // Start client
-    const clientProcess = startClient(mode);
-    
-    // Wait a bit for client to start
-    await new Promise(resolve => setTimeout(resolve, 3000));
-  }
-  
-  // Open browser (only in background mode, normal mode already handled)
-  if (mode === '2') {
+    // Open browser
     logInfo('將在 5 秒後打開瀏覽器...');
     await new Promise(resolve => setTimeout(resolve, 5000));
     
@@ -309,8 +349,8 @@ async function main() {
     logInfo('後端 API: http://localhost:3001');
     logInfo('前端: http://localhost:3000');
     console.log();
-    logInfo('系統正在後台模式運行');
-    logInfo('使用 stop.bat 或 stop-node.bat 停止系統');
+    logInfo('系統正在後台模式運行（視窗已隱藏）');
+    logInfo('使用 stop-node.bat 停止系統');
   }
 }
 
