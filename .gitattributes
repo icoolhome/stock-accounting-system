@@ -4,6 +4,7 @@
 # Batch files should use CRLF line endings (Windows standard)
 *.bat text eol=crlf
 *.cmd text eol=crlf
+setup.bat text eol=crlf
 
 # Ensure batch files are treated as text and not binary
 *.bat diff
