@@ -2,8 +2,10 @@
 setlocal enabledelayedexpansion
 chcp 65001 >nul 2>&1
 
-REM Load language strings
-call "%~dp0load_language.bat" 2>nul
+REM Load language strings (optional, continue if not found)
+if exist "%~dp0load_language.bat" (
+    call "%~dp0load_language.bat" 2>nul
+)
 
 REM Set default values if not loaded
 if not defined BATCH_SETUP_TITLE set BATCH_SETUP_TITLE=Stock Accounting System - Setup
