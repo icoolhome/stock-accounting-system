@@ -15,7 +15,8 @@
     "postinstall": "cd server && npm install && cd ../client && npm install",
     "start:node-window": "node start-node.js",
     "stop:node": "node stop-node.js",
-    "setup": "node setup.js"
+    "setup": "node setup.js",
+    "protect:bat": "node protect-bat-files.js"
   },
   "keywords": ["stock", "accounting", "trading"],
   "author": "",
