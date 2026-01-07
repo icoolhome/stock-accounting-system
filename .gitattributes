@@ -1,0 +1,22 @@
+# 確保批處理文件使用正確的編碼
+*.bat text eol=crlf working-tree-encoding=UTF-8
+
+# 確保 PowerShell 腳本使用 UTF-8
+*.ps1 text eol=crlf working-tree-encoding=UTF-8
+
+# JavaScript 文件使用 UTF-8
+*.js text eol=lf working-tree-encoding=UTF-8
+
+# TypeScript 文件使用 UTF-8
+*.ts text eol=lf working-tree-encoding=UTF-8
+*.tsx text eol=lf working-tree-encoding=UTF-8
+
+# Markdown 文件使用 UTF-8
+*.md text eol=lf working-tree-encoding=UTF-8
+
+# JSON 文件使用 UTF-8
+*.json text eol=lf working-tree-encoding=UTF-8
+
+# Python 文件使用 UTF-8
+*.py text eol=lf working-tree-encoding=UTF-8
+
