@@ -39,6 +39,24 @@ const Login = () => {
             {isRegister ? '註冊帳號' : '登入系統'}
           </h2>
         </div>
+        
+        {/* 默認管理員帳號提示 */}
+        {!isRegister && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <h3 className="text-sm font-medium text-yellow-900 mb-2">📌 默認管理員帳號</h3>
+            <p className="text-sm text-yellow-700 mb-2">
+              首次安裝後，系統會自動創建默認管理員帳號：
+            </p>
+            <div className="text-sm text-yellow-800 font-mono bg-yellow-100 p-2 rounded">
+              <div>郵箱：<strong>admin@admin.com</strong></div>
+              <div>密碼：<strong>adminadmin</strong></div>
+            </div>
+            <p className="text-xs text-yellow-600 mt-2">
+              ⚠️ 建議首次登錄後立即前往「系統設定」→「管理員設定」修改帳號和密碼
+            </p>
+          </div>
+        )}
+
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && (
             <div className="bg-red-50 border border-red-400 text-red-700 px-4 py-3 rounded">
