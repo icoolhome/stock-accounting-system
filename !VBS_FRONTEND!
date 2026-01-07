@@ -1,0 +1,2 @@
+WshShell.CurrentDirectory = "F:\stock-ai\stock-accounting-system\" 
+WshShell.Run "cmd /c npm run start:client", 0, False 
