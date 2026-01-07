@@ -36,10 +36,19 @@ export const authenticate = async (
     }
 
     next();
-  } catch (error) {
+  } catch (error: any) {
+    // 區分不同的錯誤類型
+    let message = '無效的認證令牌';
+    if (error.name === 'TokenExpiredError') {
+      message = '認證令牌已過期，請重新登錄';
+    } else if (error.name === 'JsonWebTokenError') {
+      message = '認證令牌格式錯誤';
+    }
+    
     return res.status(401).json({
       success: false,
-      message: '無效的認證令牌',
+      message,
+      error: error.name,
     });
   }
 };
