@@ -96,15 +96,24 @@ function startServer(mode) {
     execSync(`cscript //nologo "${vbsFile}"`, { stdio: 'ignore' });
     return null;
   } else {
-    // Windows 上需要使用 npm.cmd 或 shell: true
-    const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-    return spawn(npmCommand, ['start'], {
-      cwd: serverDir,
-      stdio: mode === 'background' ? 'ignore' : 'inherit',
-      detached: mode === 'background',
-      shell: false,
-      env: { ...process.env, CHCP: '65001' }
-    });
+    // Windows 上需要使用 shell: true 或通過 cmd.exe 執行
+    if (process.platform === 'win32') {
+      return spawn('cmd', ['/c', 'npm', 'start'], {
+        cwd: serverDir,
+        stdio: mode === 'background' ? 'ignore' : 'inherit',
+        detached: mode === 'background',
+        shell: false,
+        env: { ...process.env, CHCP: '65001' }
+      });
+    } else {
+      return spawn('npm', ['start'], {
+        cwd: serverDir,
+        stdio: mode === 'background' ? 'ignore' : 'inherit',
+        detached: mode === 'background',
+        shell: false,
+        env: { ...process.env, CHCP: '65001' }
+      });
+    }
   }
 }
 
@@ -121,15 +130,24 @@ function startClient(mode) {
     execSync(`cscript //nologo "${vbsFile}"`, { stdio: 'ignore' });
     return null;
   } else {
-    // Windows 上需要使用 npm.cmd 或 shell: true
-    const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-    return spawn(npmCommand, ['run', 'start:client'], {
-      cwd: __dirname,
-      stdio: mode === 'background' ? 'ignore' : 'inherit',
-      detached: mode === 'background',
-      shell: false,
-      env: { ...process.env, CHCP: '65001' }
-    });
+    // Windows 上需要使用 shell: true 或通過 cmd.exe 執行
+    if (process.platform === 'win32') {
+      return spawn('cmd', ['/c', 'npm', 'run', 'start:client'], {
+        cwd: __dirname,
+        stdio: mode === 'background' ? 'ignore' : 'inherit',
+        detached: mode === 'background',
+        shell: false,
+        env: { ...process.env, CHCP: '65001' }
+      });
+    } else {
+      return spawn('npm', ['run', 'start:client'], {
+        cwd: __dirname,
+        stdio: mode === 'background' ? 'ignore' : 'inherit',
+        detached: mode === 'background',
+        shell: false,
+        env: { ...process.env, CHCP: '65001' }
+      });
+    }
   }
 }
 
