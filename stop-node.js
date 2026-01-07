@@ -1,230 +1,115 @@
-#!/usr/bin/env node
+// 設置 UTF-8 編碼支持中文
+if (process.platform === 'win32') {
+  process.env.CHCP = '65001';
+  // 設置控制台輸出編碼
+  try {
+    require('child_process').execSync('chcp 65001 > nul', { stdio: 'ignore' });
+  } catch (e) {
+    // 忽略錯誤
+  }
+}
 
-const { execSync, spawn } = require('child_process');
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
+const { execSync } = require('child_process');
 
-const colors = {
-  reset: '\x1b[0m',
-  bright: '\x1b[1m',
-  red: '\x1b[31m',
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  blue: '\x1b[34m',
-  cyan: '\x1b[36m',
-  magenta: '\x1b[35m',
+// 統一設置子進程編碼選項
+const execOptions = (options = {}) => {
+  return {
+    encoding: 'utf8',
+    ...options,
+    env: {
+      ...process.env,
+      CHCP: '65001',
+      ...(options.env || {})
+    }
+  };
 };
 
-function log(message, color = 'reset') {
-  console.log(`${colors[color]}${message}${colors.reset}`);
-}
+// 中文化輸出
+const logInfo = (msg) => console.log(`[INFO] ${msg}`);
+const logSuccess = (msg) => console.log(`[成功] ${msg}`);
+const logError = (msg) => console.log(`[錯誤] ${msg}`);
 
-function logInfo(message) {
-  log(`[INFO] ${message}`, 'cyan');
-}
-
-function logSuccess(message) {
-  log(`[SUCCESS] ${message}`, 'green');
-}
-
-function logError(message) {
-  log(`[ERROR] ${message}`, 'red');
-}
-
-function logWarn(message) {
-  log(`[WARN] ${message}`, 'yellow');
-}
-
-function killProcessByPort(port) {
+// 停止指定端口的進程
+function stopPort(port) {
   try {
     if (process.platform === 'win32') {
-      // Windows: Find process using the port and kill it
-      const result = execSync(`netstat -ano | findstr :${port} | findstr LISTENING`, { encoding: 'utf-8' });
-      const lines = result.trim().split('\n');
+      // Windows: 使用 netstat 和 taskkill
+      logInfo(`正在查找端口 ${port} 的進程...`);
+      const result = execSync(`netstat -ano | findstr :${port}`, execOptions());
+      
+      if (!result || result.trim().length === 0) {
+        logInfo(`端口 ${port} 沒有運行中的進程`);
+        return false;
+      }
+
+      const lines = result.split('\n').filter(line => line.trim().length > 0);
       const pids = new Set();
       
-      lines.forEach(line => {
-        const match = line.trim().split(/\s+/);
-        if (match.length > 0) {
-          const pid = match[match.length - 1];
-          if (pid && /^\d+$/.test(pid)) {
-            pids.add(pid);
-          }
+      for (const line of lines) {
+        const match = line.match(/\s+(\d+)\s*$/);
+        if (match) {
+          pids.add(match[1]);
         }
-      });
-      
-      pids.forEach(pid => {
+      }
+
+      if (pids.size === 0) {
+        logInfo(`端口 ${port} 沒有找到有效的進程 ID`);
+        return false;
+      }
+
+      for (const pid of pids) {
         try {
+          logInfo(`正在停止進程 ${pid}...`);
           execSync(`taskkill /F /PID ${pid}`, { stdio: 'ignore' });
-          logInfo(`Killed process ${pid} using port ${port}`);
+          logSuccess(`進程 ${pid} 已停止`);
         } catch (err) {
-          // Process may not exist or permission denied
+          logError(`無法停止進程 ${pid}: ${err.message}`);
         }
-      });
-      
-      return pids.size > 0;
+      }
+      return true;
     } else {
-      // Linux/Mac: Use lsof to find and kill process
-      try {
-        const pid = execSync(`lsof -ti:${port}`, { encoding: 'utf-8' }).trim();
-        if (pid) {
+      // Linux/Mac: 使用 lsof 和 kill
+      logInfo(`正在查找端口 ${port} 的進程...`);
+      const result = execSync(`lsof -ti :${port}`, execOptions());
+      
+      if (!result || result.trim().length === 0) {
+        logInfo(`端口 ${port} 沒有運行中的進程`);
+        return false;
+      }
+
+      const pids = result.trim().split('\n').filter(pid => pid.trim().length > 0);
+      
+      for (const pid of pids) {
+        try {
+          logInfo(`正在停止進程 ${pid}...`);
           execSync(`kill -9 ${pid}`, { stdio: 'ignore' });
-          logInfo(`Killed process ${pid} using port ${port}`);
-          return true;
+          logSuccess(`進程 ${pid} 已停止`);
+        } catch (err) {
+          logError(`無法停止進程 ${pid}: ${err.message}`);
         }
-      } catch (err) {
-        // No process using the port
-        return false;
       }
+      return true;
     }
-  } catch (err) {
-    return false;
-  }
-  return false;
-}
-
-function killNodeProcesses() {
-  try {
-    if (process.platform === 'win32') {
-      // Windows: Kill all node.exe processes related to this project
-      const rootDir = __dirname;
-      const serverDir = path.join(rootDir, 'server');
-      const clientDir = path.join(rootDir, 'client');
-      
-      // Try to kill processes by name (node.exe)
-      // This is more aggressive but should work
-      try {
-        const result = execSync('tasklist /FI "IMAGENAME eq node.exe" /FO CSV', { encoding: 'utf-8' });
-        const lines = result.trim().split('\n').slice(1); // Skip header
-        
-        lines.forEach(line => {
-          if (line.trim()) {
-            const match = line.match(/"([^"]+)"/g);
-            if (match && match.length > 1) {
-              const pid = match[1].replace(/"/g, '');
-              try {
-                execSync(`taskkill /F /PID ${pid}`, { stdio: 'ignore' });
-                logInfo(`Killed Node.js process ${pid}`);
-              } catch (err) {
-                // Process may not exist or permission denied
-              }
-            }
-          }
-        });
-      } catch (err) {
-        // No node processes found or error
-      }
-    } else {
-      // Linux/Mac: Kill node processes
-      try {
-        execSync('pkill -f node', { stdio: 'ignore' });
-        logInfo('Killed Node.js processes');
-      } catch (err) {
-        // No processes found
-      }
-    }
-  } catch (err) {
-    logWarn('Error killing Node.js processes: ' + err.message);
-  }
-}
-
-function checkPortInUse(port) {
-  try {
-    if (process.platform === 'win32') {
-      const result = execSync(`netstat -ano | findstr :${port} | findstr LISTENING`, { encoding: 'utf-8' });
-      return result.trim().length > 0;
-    } else {
-      try {
-        execSync(`lsof -ti:${port}`, { stdio: 'ignore' });
-        return true;
-      } catch {
-        return false;
-      }
-    }
-  } catch {
+  } catch (error) {
+    // 端口沒有運行中的進程
     return false;
   }
 }
 
-async function main() {
-  console.log('\n========================================');
-  console.log('  Stock Accounting System - Stop');
-  console.log('========================================\n');
+// 主程序
+function main() {
+  logInfo('正在停止股票記帳系統服務...');
   
-  logInfo('Stopping services...');
-  console.log();
-  
-  // Stop services by port
-  let stopped = false;
-  
-  if (checkPortInUse(3001)) {
-    logInfo('Stopping backend server (port 3001)...');
-    if (killProcessByPort(3001)) {
-      logSuccess('Backend server stopped');
-      stopped = true;
-    } else {
-      logWarn('Could not stop backend server on port 3001');
-    }
+  const port3000 = stopPort(3000); // 前端端口
+  const port3001 = stopPort(3001); // 後端端口
+
+  if (port3000 || port3001) {
+    logSuccess('服務已停止');
   } else {
-    logInfo('Backend server (port 3001) is not running');
+    logInfo('沒有運行中的服務需要停止');
   }
-  
-  if (checkPortInUse(3000)) {
-    logInfo('Stopping frontend client (port 3000)...');
-    if (killProcessByPort(3000)) {
-      logSuccess('Frontend client stopped');
-      stopped = true;
-    } else {
-      logWarn('Could not stop frontend client on port 3000');
-    }
-  } else {
-    logInfo('Frontend client (port 3000) is not running');
-  }
-  
-  // Wait a bit for processes to terminate
-  if (stopped) {
-    logInfo('Waiting for processes to terminate...');
-    await new Promise(resolve => setTimeout(resolve, 2000));
-  }
-  
-  // Verify ports are free
-  const port3001Free = !checkPortInUse(3001);
-  const port3000Free = !checkPortInUse(3000);
-  
-  console.log();
-  if (port3001Free && port3000Free) {
-    logSuccess('All services stopped successfully!');
-  } else {
-    if (!port3001Free) {
-      logWarn('Port 3001 is still in use');
-    }
-    if (!port3000Free) {
-      logWarn('Port 3000 is still in use');
-    }
-    
-    // Try more aggressive approach - kill by ports again
-    logInfo('Trying to kill processes by ports again...');
-    killNodeProcessesByPorts();
-    
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    const port3001FreeAfter = !checkPortInUse(3001);
-    const port3000FreeAfter = !checkPortInUse(3000);
-    
-    if (port3001FreeAfter && port3000FreeAfter) {
-      logSuccess('All services stopped successfully!');
-    } else {
-      logWarn('Some services may still be running');
-      logInfo('You may need to manually kill the processes using Task Manager');
-    }
-  }
-  
-  console.log();
 }
 
-main().catch((error) => {
-  logError(`Unexpected error: ${error.message}`);
-  process.exit(1);
-});
+main();
+
 

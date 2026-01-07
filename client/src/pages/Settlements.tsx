@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useLanguage } from '../contexts/LanguageContext';
 import axios from 'axios';
 import { format } from 'date-fns';
 import * as XLSX from 'xlsx';
@@ -49,7 +48,6 @@ interface Settlement {
 }
 
 const Settlements = () => {
-  const { t } = useLanguage();
   const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -76,16 +74,13 @@ const Settlements = () => {
     trade_date: '',
     settlement_amount: '' as number | '',
     twd_amount: '' as number | '',
-    status: t('settlement.status.pending', '未交割'),
+    status: '未交割',
     notes: '',
   });
 
   const [showTransactionDetail, setShowTransactionDetail] = useState(false);
   const [selectedTransactions, setSelectedTransactions] = useState<Transaction[]>([]);
   const [selectedSettlementForDetail, setSelectedSettlementForDetail] = useState<number | null>(null);
-  const [dragging, setDragging] = useState(false);
-  const [modalPosition, setModalPosition] = useState<{ x: number | null; y: number | null }>({ x: null, y: null });
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
     fetchBankAccounts();
@@ -115,7 +110,7 @@ const Settlements = () => {
       settlementDate.setHours(0, 0, 0, 0);
       
       // 如果交割日期是今天或過去，狀態設為「已交割」；否則設為「未交割」
-      const autoStatus = settlementDate <= today ? t('settlement.status.completed', '已交割') : t('settlement.status.pending', '未交割');
+      const autoStatus = settlementDate <= today ? '已交割' : '未交割';
       
       setFormData(prev => ({
         ...prev,
@@ -157,7 +152,7 @@ const Settlements = () => {
         setStats(response.data.stats);
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || t('error.fetchFailed', '獲取交割記錄失敗'));
+      setError(err.response?.data?.message || '獲取交割記錄失敗');
     } finally {
       setLoading(false);
     }
@@ -187,7 +182,7 @@ const Settlements = () => {
       resetForm();
       fetchSettlements();
     } catch (err: any) {
-      setError(err.response?.data?.message || t('error.operationFailed', '操作失敗'));
+      setError(err.response?.data?.message || '操作失敗');
     }
   };
 
@@ -210,11 +205,11 @@ const Settlements = () => {
       }
       
       // 轉換舊的狀態值為新的狀態值（向後兼容）
-      let status = settlement.status || t('settlement.status.pending', '未交割');
+      let status = settlement.status || '未交割';
       if (status === '待處理') {
-        status = t('settlement.status.pending', '未交割');
+        status = '未交割';
       } else if (status === '已完成') {
-        status = t('settlement.status.completed', '已交割');
+        status = '已交割';
       }
       
       setFormData({
@@ -227,8 +222,6 @@ const Settlements = () => {
         status: status,
         notes: settlement.notes || '',
       });
-      // 重置模態框位置到中間
-      setModalPosition({ x: null, y: null });
       setShowModal(true);
     } catch (error) {
       console.error('編輯交割記錄時發生錯誤:', error);
@@ -242,48 +235,8 @@ const Settlements = () => {
       setDeleteConfirm(null);
       fetchSettlements();
     } catch (err: any) {
-      setError(err.response?.data?.message || t('error.deleteFailed', '刪除失敗'));
+      setError(err.response?.data?.message || '刪除失敗');
     }
-  };
-
-  const handleModalMouseDown = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('input, select, textarea, button')) {
-      return;
-    }
-    const modalElement = e.currentTarget as HTMLElement;
-    const rect = modalElement.getBoundingClientRect();
-    
-    // 如果當前是居中狀態，先計算實際位置
-    let currentX = modalPosition.x;
-    let currentY = modalPosition.y;
-    
-    if (currentX === null || currentY === null) {
-      // 居中狀態，計算實際像素位置
-      currentX = rect.left;
-      currentY = rect.top;
-      setModalPosition({ x: currentX, y: currentY });
-    }
-    
-    setDragging(true);
-    setDragStart({
-      x: e.clientX - currentX,
-      y: e.clientY - currentY,
-    });
-  };
-
-  const handleModalMouseMove = (e: React.MouseEvent) => {
-    if (dragging) {
-      const newX = e.clientX - dragStart.x;
-      const newY = e.clientY - dragStart.y;
-      setModalPosition({
-        x: newX,
-        y: newY,
-      });
-    }
-  };
-
-  const handleModalMouseUp = () => {
-    setDragging(false);
   };
 
   const resetForm = () => {
@@ -294,7 +247,7 @@ const Settlements = () => {
       trade_date: '',
       settlement_amount: '' as number | '',
       twd_amount: '' as number | '',
-      status: t('settlement.status.pending', '未交割'),
+      status: '未交割',
       notes: '',
     });
     setShowTransactionDetail(false);
@@ -400,14 +353,14 @@ const Settlements = () => {
   };
 
   if (loading && settlements.length === 0) {
-    return <div className="text-center py-8">{t('common.loading', '載入中...')}</div>;
+    return <div className="text-center py-8">載入中...</div>;
   }
 
   return (
     <div className="px-4 py-6 sm:px-0">
       <div className="bg-white shadow rounded-lg p-6">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">{t('settlements.title', '交割管理')}</h1>
+          <h1 className="text-2xl font-bold text-gray-900">交割管理</h1>
           <div className="flex items-center gap-3">
             <button
               onClick={exportToExcel}
@@ -433,8 +386,6 @@ const Settlements = () => {
             <button
               onClick={() => {
                 resetForm();
-                // 重置模態框位置到中間
-                setModalPosition({ x: null, y: null });
                 setShowModal(true);
               }}
               className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium"
@@ -453,7 +404,7 @@ const Settlements = () => {
             </p>
           </div>
           <div className="bg-green-50 p-4 rounded-lg">
-            <h3 className="text-sm font-medium text-gray-600">{t('settlement.status.completed', '已交割')}</h3>
+            <h3 className="text-sm font-medium text-gray-600">已交割</h3>
             <p className="text-2xl font-bold text-gray-900">
               ${stats.completedAmount.toFixed(2)}
             </p>
@@ -597,8 +548,8 @@ const Settlements = () => {
               className="w-full px-3 py-2 border border-gray-300 rounded-md"
             >
               <option value="">全部</option>
-              <option value={t('settlement.status.pending', '未交割')}>{t('settlement.status.pending', '未交割')}</option>
-              <option value={t('settlement.status.completed', '已交割')}>{t('settlement.status.completed', '已交割')}</option>
+              <option value="未交割">未交割</option>
+              <option value="已交割">已交割</option>
               <option value="失敗">失敗</option>
             </select>
           </div>
@@ -700,7 +651,7 @@ const Settlements = () => {
                         <td className="px-4 py-4 whitespace-nowrap text-sm">
                           <span
                             className={`px-2 py-1 rounded-full text-xs ${
-                              settlement.status === t('settlement.status.completed', '已交割')
+                              settlement.status === '已交割'
                                 ? 'bg-green-100 text-green-800'
                                 : settlement.status === '失敗'
                                 ? 'bg-red-100 text-red-800'
@@ -950,24 +901,9 @@ const Settlements = () => {
 
         {/* 新增/編輯模態框 */}
         {showModal && (
-          <div
-            className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50"
-            onMouseMove={handleModalMouseMove}
-            onMouseUp={handleModalMouseUp}
-          >
-            <div
-              className="relative mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white"
-              style={{
-                position: 'fixed',
-                top: modalPosition.y === null ? '50%' : `${modalPosition.y}px`,
-                left: modalPosition.x === null ? '50%' : `${modalPosition.x}px`,
-                transform: modalPosition.y === null ? 'translate(-50%, -50%)' : 'none',
-                maxHeight: '90vh',
-                overflowY: 'auto',
-              }}
-              onMouseDown={handleModalMouseDown}
-            >
-              <h3 className="text-lg font-bold text-gray-900 mb-4 cursor-move">
+          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+            <div className="relative top-20 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white">
+              <h3 className="text-lg font-bold text-gray-900 mb-4">
                 {editingSettlement ? '編輯交割記錄' : '新增交割記錄'}
               </h3>
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -1162,9 +1098,9 @@ const Settlements = () => {
                       onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md"
                     >
-                      <option value={t('settlement.status.pending', '未交割')}>{t('settlement.status.pending', '未交割')}</option>
-                      <option value={t('settlement.status.completed', '已交割')}>{t('settlement.status.completed', '已交割')}</option>
-                      <option value={t('common.error', '失敗')}>{t('common.error', '失敗')}</option>
+                      <option value="未交割">未交割</option>
+                      <option value="已交割">已交割</option>
+                      <option value="失敗">失敗</option>
                     </select>
                   </div>
                   

@@ -120,9 +120,9 @@ const Portfolio = () => {
       fullName: h.stock_name,
     })),
     ...(otherValue > 0 ? [{
-      name: t('portfolio.other', '其他'),
+      name: '其他',
       value: otherValue,
-      fullName: t('portfolio.otherHoldings', '其他持股'),
+      fullName: '其他持股',
     }] : []),
   ];
 
@@ -187,21 +187,21 @@ const Portfolio = () => {
         {/* 總體統計 */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-blue-50 p-4 rounded-lg">
-            <h3 className="text-sm font-medium text-gray-600">{t('portfolio.totalMarketValue', '總市值')}</h3>
+            <h3 className="text-sm font-medium text-gray-600">總市值</h3>
             <p className="text-2xl font-bold text-gray-900">${totalMarketValue.toFixed(2)}</p>
           </div>
           <div className="bg-purple-50 p-4 rounded-lg">
-            <h3 className="text-sm font-medium text-gray-600">{t('portfolio.totalCost', '總成本')}</h3>
+            <h3 className="text-sm font-medium text-gray-600">總成本</h3>
             <p className="text-2xl font-bold text-gray-900">${totalCost.toFixed(2)}</p>
           </div>
           <div className={`p-4 rounded-lg ${totalProfitLoss >= 0 ? 'bg-green-50' : 'bg-red-50'}`}>
-            <h3 className="text-sm font-medium text-gray-600">{t('portfolio.totalProfitLoss', '總損益')}</h3>
+            <h3 className="text-sm font-medium text-gray-600">總損益</h3>
             <p className={`text-2xl font-bold ${totalProfitLoss >= 0 ? 'text-green-900' : 'text-red-900'}`}>
               ${totalProfitLoss.toFixed(2)}
             </p>
           </div>
           <div className={`p-4 rounded-lg ${totalReturnRate >= 0 ? 'bg-green-50' : 'bg-red-50'}`}>
-            <h3 className="text-sm font-medium text-gray-600">{t('portfolio.totalReturnRate', '總報酬率')}</h3>
+            <h3 className="text-sm font-medium text-gray-600">總報酬率</h3>
             <p className={`text-2xl font-bold ${totalReturnRate >= 0 ? 'text-green-900' : 'text-red-900'}`}>
               {totalReturnRate.toFixed(2)}%
             </p>
@@ -211,7 +211,7 @@ const Portfolio = () => {
         {/* 帳戶統計 */}
         <div className="mb-6">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold text-gray-900">{t('portfolio.accountStats', '帳戶統計')}</h2>
+            <h2 className="text-xl font-bold text-gray-900">帳戶統計</h2>
             <select
               value={selectedAccount}
               onChange={(e) => {
@@ -220,7 +220,7 @@ const Portfolio = () => {
               }}
               className="px-3 py-2 border border-gray-300 rounded-md text-sm"
             >
-              <option value="all">{t('portfolio.allAccounts', '所有帳戶')}</option>
+              <option value="all">所有帳戶</option>
               {accounts.map((account) => (
                 <option key={account.id} value={account.id}>
                   {account.account_name} - {account.broker_name}
@@ -250,7 +250,7 @@ const Portfolio = () => {
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600">{t('portfolio.returnRate', '報酬率')}：</span>
+                    <span className="text-gray-600">報酬率：</span>
                     <span className={`font-medium ${stat.returnRate >= 0 ? 'text-red-600' : 'text-green-600'}`}>
                       {stat.returnRate.toFixed(2)}%
                     </span>
@@ -266,7 +266,7 @@ const Portfolio = () => {
           <div className="mb-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* 資產分布餅圖 */}
             <div className="bg-white border border-gray-200 rounded-lg p-4">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">{t('portfolio.assetDistribution', '資產分布')}</h2>
+              <h2 className="text-xl font-bold text-gray-900 mb-4">資產分布</h2>
               {pieChartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={350}>
                   <PieChart>
@@ -294,13 +294,13 @@ const Portfolio = () => {
                   </PieChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="text-center py-8 text-gray-500">{t('portfolio.noData', '尚無數據')}</div>
+                <div className="text-center py-8 text-gray-500">尚無數據</div>
               )}
             </div>
 
             {/* 帳戶市值柱狀圖 */}
             <div className="bg-white border border-gray-200 rounded-lg p-4">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">{t('portfolio.accountMarketValueComparison', '帳戶市值對比')}</h2>
+              <h2 className="text-xl font-bold text-gray-900 mb-4">帳戶市值對比</h2>
               {barChartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={350}>
                   <BarChart data={barChartData}>
@@ -326,7 +326,7 @@ const Portfolio = () => {
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="text-center py-8 text-gray-500">{t('portfolio.noData', '尚無數據')}</div>
+                <div className="text-center py-8 text-gray-500">尚無數據</div>
               )}
             </div>
 
@@ -360,7 +360,7 @@ const Portfolio = () => {
                   </PieChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="text-center py-8 text-gray-500">{t('portfolio.noData', '尚無數據')}</div>
+                <div className="text-center py-8 text-gray-500">尚無數據</div>
               )}
             </div>
           </div>

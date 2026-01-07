@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { useLanguage } from '../contexts/LanguageContext';
 
 interface SecuritiesAccount {
   id: number;
@@ -11,7 +10,6 @@ interface SecuritiesAccount {
 }
 
 const SecuritiesAccount = () => {
-  const { t } = useLanguage();
   const [accounts, setAccounts] = useState<SecuritiesAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -33,7 +31,7 @@ const SecuritiesAccount = () => {
       const response = await axios.get('/api/securities-accounts');
       setAccounts(response.data.data);
     } catch (err: any) {
-      setError(err.response?.data?.message || t('securitiesAccount.fetchFailed', '獲取證券帳戶失敗'));
+      setError(err.response?.data?.message || '獲取證券帳戶失敗');
     } finally {
       setLoading(false);
     }
@@ -54,7 +52,7 @@ const SecuritiesAccount = () => {
       setFormData({ account_name: '', broker_name: '', account_number: '' });
       fetchAccounts();
     } catch (err: any) {
-      setError(err.response?.data?.message || t('securitiesAccount.operationFailed', '操作失敗'));
+      setError(err.response?.data?.message || '操作失敗');
     }
   };
 
@@ -74,7 +72,7 @@ const SecuritiesAccount = () => {
       setDeleteConfirm(null);
       fetchAccounts();
     } catch (err: any) {
-      setError(err.response?.data?.message || t('securitiesAccount.deleteFailed', '刪除失敗'));
+      setError(err.response?.data?.message || '刪除失敗');
     }
   };
 
@@ -86,24 +84,24 @@ const SecuritiesAccount = () => {
   };
 
   if (loading) {
-    return <div className="text-center py-8">{t('common.loading', '載入中...')}</div>;
+    return <div className="text-center py-8">載入中...</div>;
   }
 
   return (
     <div className="px-4 py-6 sm:px-0">
       <div className="bg-white shadow rounded-lg p-6">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">{t('securitiesAccount.title', '證券帳戶管理')}</h1>
+          <h1 className="text-2xl font-bold text-gray-900">證券帳戶管理</h1>
           <button
             onClick={() => setShowModal(true)}
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium"
           >
-            {t('securitiesAccount.addAccount', '新增證券帳戶')}
+            新增證券帳戶
           </button>
         </div>
         {accounts.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
-            {t('securitiesAccount.noAccounts', '尚無證券帳戶，請點擊「新增證券帳戶」按鈕新增')}
+            尚無證券帳戶，請點擊「新增證券帳戶」按鈕新增
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -111,16 +109,16 @@ const SecuritiesAccount = () => {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t('securitiesAccount.accountName', '帳戶名稱')}
+                    帳戶名稱
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t('securitiesAccount.brokerName', '券商名稱')}
+                    券商名稱
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t('securitiesAccount.accountNumber', '帳戶號碼')}
+                    帳戶號碼
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {t('common.actions', '操作')}
+                    操作
                   </th>
                 </tr>
               </thead>
@@ -162,12 +160,12 @@ const SecuritiesAccount = () => {
           <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
             <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
               <h3 className="text-lg font-bold text-gray-900 mb-4">
-                {editingAccount ? t('securitiesAccount.editAccount', '編輯證券帳戶') : t('securitiesAccount.addAccount', '新增證券帳戶')}
+                {editingAccount ? '編輯證券帳戶' : '新增證券帳戶'}
               </h3>
               <form onSubmit={handleSubmit}>
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {t('securitiesAccount.accountNameLabel', '帳戶名稱 *')}
+                    帳戶名稱 *
                   </label>
                   <input
                     type="text"
@@ -177,12 +175,12 @@ const SecuritiesAccount = () => {
                       setFormData({ ...formData, account_name: e.target.value })
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    placeholder={t('securitiesAccount.accountNamePlaceholder', '請輸入帳戶名稱')}
+                    placeholder="請輸入帳戶名稱"
                   />
                 </div>
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {t('securitiesAccount.brokerNameLabel', '券商名稱 *')}
+                    券商名稱 *
                   </label>
                   <input
                     type="text"
@@ -192,12 +190,12 @@ const SecuritiesAccount = () => {
                       setFormData({ ...formData, broker_name: e.target.value })
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    placeholder={t('securitiesAccount.brokerNamePlaceholder', '請輸入券商名稱')}
+                    placeholder="請輸入券商名稱"
                   />
                 </div>
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {t('securitiesAccount.accountNumberLabel', '帳戶號碼 *')}
+                    帳戶號碼 *
                   </label>
                   <input
                     type="text"
@@ -207,7 +205,7 @@ const SecuritiesAccount = () => {
                       setFormData({ ...formData, account_number: e.target.value })
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    placeholder={t('securitiesAccount.accountNumberPlaceholder', '請輸入帳戶號碼')}
+                    placeholder="請輸入帳戶號碼"
                   />
                 </div>
                 <div className="flex justify-end space-x-2">
@@ -216,13 +214,13 @@ const SecuritiesAccount = () => {
                     onClick={handleCancel}
                     className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
                   >
-                    {t('common.cancel', '取消')}
+                    取消
                   </button>
                   <button
                     type="submit"
                     className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
                   >
-                    {t('securitiesAccount.save', '儲存')}
+                    儲存
                   </button>
                 </div>
               </form>
@@ -234,20 +232,20 @@ const SecuritiesAccount = () => {
         {deleteConfirm && (
           <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
             <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">{t('securitiesAccount.confirmDelete', '確認刪除')}</h3>
-              <p className="mb-4">{t('securitiesAccount.confirmDeleteMessage', '確定要刪除此證券帳戶嗎？此操作無法復原。')}</p>
+              <h3 className="text-lg font-bold text-gray-900 mb-4">確認刪除</h3>
+              <p className="mb-4">確定要刪除此證券帳戶嗎？此操作無法復原。</p>
               <div className="flex justify-end space-x-2">
                 <button
                   onClick={() => setDeleteConfirm(null)}
                   className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
                 >
-                  {t('common.cancel', '取消')}
+                  取消
                 </button>
                 <button
                   onClick={() => handleDelete(deleteConfirm)}
                   className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
                 >
-                  {t('securitiesAccount.confirmDeleteButton', '確定刪除')}
+                  確定刪除
                 </button>
               </div>
             </div>
@@ -266,7 +264,7 @@ const SecuritiesAccount = () => {
               onClick={() => setError('')}
               className="ml-2 text-white/80 hover:text-white text-sm"
             >
-              {t('securitiesAccount.close', '關閉')}
+              關閉
             </button>
           </div>
         </div>

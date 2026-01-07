@@ -358,217 +358,28 @@ router.post('/diagnostics', async (req, res) => {
 
     const db = getDatabase();
 
-    // ========== 基礎檢查 ==========
-    
     // 檢查資料庫連接
     try {
       await get('SELECT 1', []);
-      diagnostics.checks.push({ category: '基礎檢查', name: '資料庫連接', status: 'success', message: '正常' });
+      diagnostics.checks.push({ name: '資料庫連接', status: 'success', message: '正常' });
     } catch (error: any) {
-      diagnostics.checks.push({ category: '基礎檢查', name: '資料庫連接', status: 'error', message: error.message });
+      diagnostics.checks.push({ name: '資料庫連接', status: 'error', message: error.message });
     }
 
-    // 檢查資料庫文件大小
+    // 檢查用戶表
     try {
-      const fs = require('fs');
-      const path = require('path');
-      const dbPath = process.env.DB_PATH || path.join(__dirname, '../../database.sqlite');
-      if (fs.existsSync(dbPath)) {
-        const stats = fs.statSync(dbPath);
-        const sizeInMB = (stats.size / (1024 * 1024)).toFixed(2);
-        diagnostics.checks.push({ category: '基礎檢查', name: '資料庫文件大小', status: 'success', message: `${sizeInMB} MB` });
-      } else {
-        diagnostics.checks.push({ category: '基礎檢查', name: '資料庫文件大小', status: 'warning', message: '資料庫文件不存在' });
-      }
+      const userCount = await get('SELECT COUNT(*) as count FROM users', []);
+      diagnostics.checks.push({ name: '用戶表', status: 'success', message: `用戶數: ${userCount.count}` });
     } catch (error: any) {
-      diagnostics.checks.push({ category: '基礎檢查', name: '資料庫文件大小', status: 'error', message: error.message });
+      diagnostics.checks.push({ name: '用戶表', status: 'error', message: error.message });
     }
 
-    // ========== 數據表檢查 ==========
-    
-    // 定義所有需要檢查的數據表
-    const tables = [
-      { name: 'users', displayName: '用戶表' },
-      { name: 'securities_accounts', displayName: '證券帳戶表' },
-      { name: 'transactions', displayName: '交易記錄表' },
-      { name: 'bank_accounts', displayName: '銀行帳戶表' },
-      { name: 'bank_transactions', displayName: '銀行明細表' },
-      { name: 'holdings', displayName: '庫存表' },
-      { name: 'settlements', displayName: '交割記錄表' },
-      { name: 'dividends', displayName: '收益記錄表' },
-      { name: 'stock_data', displayName: '股票資料表' },
-      { name: 'currency_settings', displayName: '幣別設定表' },
-      { name: 'system_logs', displayName: '系統日誌表' },
-      { name: 'twse_exrights', displayName: '除權除息資料表' },
-    ];
-
-    // 檢查每個數據表
-    for (const table of tables) {
-      try {
-        const count = await get(`SELECT COUNT(*) as count FROM ${table.name}`, []);
-        diagnostics.checks.push({ 
-          category: '數據表檢查', 
-          name: table.displayName, 
-          status: 'success', 
-          message: `記錄數: ${count?.count || 0}` 
-        });
-      } catch (error: any) {
-        diagnostics.checks.push({ 
-          category: '數據表檢查', 
-          name: table.displayName, 
-          status: 'error', 
-          message: error.message 
-        });
-      }
-    }
-
-    // ========== 數據完整性檢查 ==========
-    
-    // 檢查資料庫完整性（SQLite 內建完整性檢查）
+    // 檢查交易記錄表
     try {
-      const integrityCheck = await all('PRAGMA integrity_check', []);
-      if (integrityCheck && integrityCheck.length > 0 && integrityCheck[0].integrity_check === 'ok') {
-        diagnostics.checks.push({ category: '數據完整性', name: '資料庫完整性', status: 'success', message: '正常' });
-      } else {
-        diagnostics.checks.push({ category: '數據完整性', name: '資料庫完整性', status: 'warning', message: '完整性檢查返回異常' });
-      }
+      const transCount = await get('SELECT COUNT(*) as count FROM transactions', []);
+      diagnostics.checks.push({ name: '交易記錄表', status: 'success', message: `記錄數: ${transCount.count}` });
     } catch (error: any) {
-      diagnostics.checks.push({ category: '數據完整性', name: '資料庫完整性', status: 'warning', message: '無法執行完整性檢查' });
-    }
-
-    // 檢查孤立記錄（沒有對應用戶的記錄）
-    const orphanChecks = [
-      { table: 'transactions', foreignKey: 'user_id', displayName: '交易記錄' },
-      { table: 'securities_accounts', foreignKey: 'user_id', displayName: '證券帳戶' },
-      { table: 'bank_accounts', foreignKey: 'user_id', displayName: '銀行帳戶' },
-      { table: 'holdings', foreignKey: 'user_id', displayName: '庫存' },
-      { table: 'settlements', foreignKey: 'user_id', displayName: '交割記錄' },
-      { table: 'dividends', foreignKey: 'user_id', displayName: '收益記錄' },
-    ];
-
-    for (const check of orphanChecks) {
-      try {
-        const orphanCount = await get(
-          `SELECT COUNT(*) as count FROM ${check.table} WHERE ${check.foreignKey} NOT IN (SELECT id FROM users)`,
-          []
-        );
-        if (orphanCount && orphanCount.count > 0) {
-          diagnostics.checks.push({ 
-            category: '數據完整性', 
-            name: `${check.displayName}孤立記錄`, 
-            status: 'warning', 
-            message: `發現 ${orphanCount.count} 條孤立記錄` 
-          });
-        } else {
-          diagnostics.checks.push({ 
-            category: '數據完整性', 
-            name: `${check.displayName}孤立記錄`, 
-            status: 'success', 
-            message: '無孤立記錄' 
-          });
-        }
-      } catch (error: any) {
-        diagnostics.checks.push({ 
-          category: '數據完整性', 
-          name: `${check.displayName}孤立記錄`, 
-          status: 'error', 
-          message: error.message 
-        });
-      }
-    }
-
-    // ========== 系統狀態檢查 ==========
-    
-    // 檢查最近的錯誤日誌
-    try {
-      const errorLogs = await all(
-        "SELECT COUNT(*) as count FROM system_logs WHERE log_level = 'error' AND created_at > datetime('now', '-7 days')",
-        []
-      );
-      const errorCount = errorLogs[0]?.count || 0;
-      if (errorCount > 0) {
-        diagnostics.checks.push({ 
-          category: '系統狀態', 
-          name: '最近7天錯誤日誌', 
-          status: 'warning', 
-          message: `發現 ${errorCount} 條錯誤日誌` 
-        });
-      } else {
-        diagnostics.checks.push({ 
-          category: '系統狀態', 
-          name: '最近7天錯誤日誌', 
-          status: 'success', 
-          message: '無錯誤日誌' 
-        });
-      }
-    } catch (error: any) {
-      diagnostics.checks.push({ category: '系統狀態', name: '最近7天錯誤日誌', status: 'error', message: error.message });
-    }
-
-    // 檢查系統日誌總數
-    try {
-      const logCount = await get('SELECT COUNT(*) as count FROM system_logs', []);
-      diagnostics.checks.push({ 
-        category: '系統狀態', 
-        name: '系統日誌總數', 
-        status: 'success', 
-        message: `共 ${logCount?.count || 0} 條日誌` 
-      });
-    } catch (error: any) {
-      diagnostics.checks.push({ category: '系統狀態', name: '系統日誌總數', status: 'error', message: error.message });
-    }
-
-    // 檢查管理員帳號數量
-    try {
-      const adminCount = await get("SELECT COUNT(*) as count FROM users WHERE role = 'admin'", []);
-      const count = adminCount?.count || 0;
-      if (count === 0) {
-        diagnostics.checks.push({ 
-          category: '系統狀態', 
-          name: '管理員帳號', 
-          status: 'warning', 
-          message: '未發現管理員帳號' 
-        });
-      } else {
-        diagnostics.checks.push({ 
-          category: '系統狀態', 
-          name: '管理員帳號', 
-          status: 'success', 
-          message: `共 ${count} 個管理員帳號` 
-        });
-      }
-    } catch (error: any) {
-      diagnostics.checks.push({ category: '系統狀態', name: '管理員帳號', status: 'error', message: error.message });
-    }
-
-    // ========== 數據統計 ==========
-    
-    // 統計各表數據量（只統計主要業務表）
-    const statsTables = [
-      { name: 'transactions', displayName: '交易記錄' },
-      { name: 'holdings', displayName: '庫存記錄' },
-      { name: 'dividends', displayName: '收益記錄' },
-      { name: 'settlements', displayName: '交割記錄' },
-      { name: 'bank_transactions', displayName: '銀行明細' },
-    ];
-
-    for (const table of statsTables) {
-      try {
-        const count = await get(`SELECT COUNT(*) as count FROM ${table.name}`, []);
-        diagnostics.checks.push({ 
-          category: '數據統計', 
-          name: table.displayName, 
-          status: 'success', 
-          message: `${count?.count || 0} 筆` 
-        });
-      } catch (error: any) {
-        diagnostics.checks.push({ 
-          category: '數據統計', 
-          name: table.displayName, 
-          status: 'error', 
-          message: error.message 
-        });
-      }
+      diagnostics.checks.push({ name: '交易記錄表', status: 'error', message: error.message });
     }
 
     // 創建診斷日誌

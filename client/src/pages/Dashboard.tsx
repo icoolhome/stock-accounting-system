@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
-import { useLanguage } from '../contexts/LanguageContext';
 
 interface Transaction {
   id: number;
@@ -15,7 +14,6 @@ interface Transaction {
 }
 
 const Dashboard = () => {
-  const { t } = useLanguage();
   const [holdingsStats, setHoldingsStats] = useState({
     totalMarketValue: 0,
     totalCost: 0,
@@ -101,7 +99,7 @@ const Dashboard = () => {
   };
 
   if (loading) {
-    return <div className="text-center py-8">{t('common.loading', '載入中...')}</div>;
+    return <div className="text-center py-8">載入中...</div>;
   }
 
   return (
@@ -111,7 +109,7 @@ const Dashboard = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between rounded-t-lg">
-              <h2 className="text-xl font-bold text-gray-800">{t('dashboard.welcomeTitle', '歡迎使用股票記帳系統')}</h2>
+              <h2 className="text-xl font-bold text-gray-800">歡迎使用股票記帳系統</h2>
               <button
                 onClick={handleCloseWelcomeGuide}
                 className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -123,7 +121,7 @@ const Dashboard = () => {
             </div>
             
             <div className="px-6 py-6">
-              <p className="text-gray-600 mb-6">{t('dashboard.welcomeDesc', '為了讓您快速開始使用系統，請按照以下步驟進行初始設定：')}</p>
+              <p className="text-gray-600 mb-6">為了讓您快速開始使用系統，請按照以下步驟進行初始設定：</p>
               
               <div className="space-y-4">
                 <div className="flex items-start gap-4 p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
@@ -131,10 +129,10 @@ const Dashboard = () => {
                     1
                   </div>
                   <div className="flex-1">
-                    <p className="text-gray-800 font-medium mb-1">{t('dashboard.addSecuritiesAccount', '新增證券帳戶')}</p>
+                    <p className="text-gray-800 font-medium mb-1">新增證券帳戶</p>
                     <p className="text-sm text-gray-600 mb-2">
-                      {t('dashboard.enter', '進入')}<span className="font-medium">{t('menu.settings', '系統設定')}</span> → <span className="font-medium">{t('settings.accountManagement', '帳戶相關')}</span> → 
-                      {t('dashboard.click', '點擊')}<span className="font-medium">{t('dashboard.goToSecuritiesAccountManagement', '前往證券帳戶管理')}</span> → <span className="font-medium">{t('dashboard.addSecuritiesAccount', '新增證券帳戶')}</span>
+                      進入<span className="font-medium">系統設定</span> → <span className="font-medium">帳戶相關</span> → 
+                      點擊<span className="font-medium">前往證券帳戶管理</span> → <span className="font-medium">新增證券帳戶</span>
                     </p>
                     <button
                       onClick={() => {
@@ -143,7 +141,7 @@ const Dashboard = () => {
                       }}
                       className="text-sm text-blue-600 hover:text-blue-800 font-medium"
                     >
-                      {t('dashboard.gotoSettings', '前往設定')} →
+                      前往設定 →
                     </button>
                   </div>
                 </div>
@@ -153,9 +151,9 @@ const Dashboard = () => {
                     2
                   </div>
                   <div className="flex-1">
-                    <p className="text-gray-800 font-medium mb-1">{t('dashboard.addBankAccount', '新增銀行帳戶')}</p>
+                    <p className="text-gray-800 font-medium mb-1">新增銀行帳戶</p>
                     <p className="text-sm text-gray-600 mb-2">
-                      {t('dashboard.enter', '進入')}<span className="font-medium">{t('menu.bankAccounts', '銀行帳戶')}</span> → <span className="font-medium">{t('dashboard.addBankAccount', '新增銀行帳戶')}</span>
+                      進入<span className="font-medium">銀行帳戶</span> → <span className="font-medium">新增銀行帳戶</span>
                     </p>
                     <button
                       onClick={() => {
@@ -164,7 +162,7 @@ const Dashboard = () => {
                       }}
                       className="text-sm text-green-600 hover:text-green-800 font-medium"
                     >
-                      {t('dashboard.gotoBankAccounts', '前往銀行帳戶')} →
+                      前往銀行帳戶 →
                     </button>
                   </div>
                 </div>
@@ -174,10 +172,10 @@ const Dashboard = () => {
                     3
                   </div>
                   <div className="flex-1">
-                    <p className="text-gray-800 font-medium mb-1">{t('dashboard.updateStockData', '更新股票資料')}</p>
+                    <p className="text-gray-800 font-medium mb-1">更新股票資料</p>
                     <p className="text-sm text-gray-600 mb-2">
-                      {t('dashboard.enter', '進入')}<span className="font-medium">{t('menu.settings', '系統設定')}</span> → <span className="font-medium">{t('settings.apiSettings', 'API設定')}</span> → 
-                      {t('dashboard.click', '點擊')}<span className="font-medium">{t('dashboard.updateStockData', '更新股票資料')}</span> → <span className="font-medium">{t('common.save', '保存設定')}</span>
+                      進入<span className="font-medium">系統設定</span> → <span className="font-medium">API設定</span> → 
+                      點擊<span className="font-medium">更新股票資料</span> → <span className="font-medium">保存設定</span>
                     </p>
                     <button
                       onClick={() => {
@@ -186,7 +184,7 @@ const Dashboard = () => {
                       }}
                       className="text-sm text-purple-600 hover:text-purple-800 font-medium"
                     >
-                      {t('dashboard.gotoSettings', '前往設定')} →
+                      前往設定 →
                     </button>
                   </div>
                 </div>
@@ -196,9 +194,9 @@ const Dashboard = () => {
                     4
                   </div>
                   <div className="flex-1">
-                    <p className="text-gray-800 font-medium mb-1">{t('dashboard.addTransactionRecord', '新增交易記錄')}</p>
+                    <p className="text-gray-800 font-medium mb-1">新增交易記錄</p>
                     <p className="text-sm text-gray-600 mb-2">
-                      {t('dashboard.enter', '進入')}<span className="font-medium">{t('menu.transactions', '交易記錄')}</span> → <span className="font-medium">{t('dashboard.addTransactionRecord', '新增交易記錄')}</span>
+                      進入<span className="font-medium">交易記錄</span> → <span className="font-medium">新增交易記錄</span>
                     </p>
                     <button
                       onClick={() => {
@@ -207,7 +205,7 @@ const Dashboard = () => {
                       }}
                       className="text-sm text-yellow-600 hover:text-yellow-800 font-medium"
                     >
-                      {t('dashboard.gotoTransactions', '前往交易記錄')} →
+                      前往交易記錄 →
                     </button>
                   </div>
                 </div>
@@ -217,9 +215,9 @@ const Dashboard = () => {
                     5
                   </div>
                   <div className="flex-1">
-                    <p className="text-gray-800 font-medium mb-1">{t('dashboard.addSettlementRecord', '新增交割記錄')}</p>
+                    <p className="text-gray-800 font-medium mb-1">新增交割記錄</p>
                     <p className="text-sm text-gray-600 mb-2">
-                      {t('dashboard.enter', '進入')}<span className="font-medium">{t('menu.settlements', '交割管理')}</span> → <span className="font-medium">{t('dashboard.addSettlementRecord', '新增交割記錄')}</span>
+                      進入<span className="font-medium">交割管理</span> → <span className="font-medium">新增交割記錄</span>
                     </p>
                     <button
                       onClick={() => {
@@ -228,7 +226,7 @@ const Dashboard = () => {
                       }}
                       className="text-sm text-red-600 hover:text-red-800 font-medium"
                     >
-                      {t('dashboard.gotoSettlements', '前往交割管理')} →
+                      前往交割管理 →
                     </button>
                   </div>
                 </div>
@@ -238,9 +236,9 @@ const Dashboard = () => {
                     6
                   </div>
                   <div className="flex-1">
-                    <p className="text-gray-800 font-medium mb-1">{t('dashboard.addBankDetail', '新增銀行明細')}</p>
+                    <p className="text-gray-800 font-medium mb-1">新增銀行明細</p>
                     <p className="text-sm text-gray-600 mb-2">
-                      {t('dashboard.enter', '進入')}<span className="font-medium">{t('menu.bankAccounts', '銀行帳戶')}</span> → <span className="font-medium">{t('dashboard.addBankDetail', '新增銀行明細')}</span>
+                      進入<span className="font-medium">銀行帳戶</span> → <span className="font-medium">新增銀行明細</span>
                     </p>
                     <button
                       onClick={() => {
@@ -249,8 +247,46 @@ const Dashboard = () => {
                       }}
                       className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
                     >
-                      {t('dashboard.gotoBankAccounts', '前往銀行帳戶')} →
+                      前往銀行帳戶 →
                     </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 讚賞碼區域 */}
+            <div className="px-6 py-4 border-t border-gray-200 bg-gradient-to-r from-yellow-50 to-orange-50">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '24px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
+                  <span className="text-gray-700 font-medium text-sm">
+                    感謝您的使用，如有任何問題歡迎聯繫我們
+                  </span>
+                  <a 
+                    href="mailto:icoolhome001@gmail.com"
+                    style={{ 
+                      color: '#2563eb', 
+                      textDecoration: 'underline',
+                      fontWeight: 500,
+                      fontSize: '0.875rem'
+                    }}
+                    className="hover:text-blue-800"
+                  >
+                    icoolhome001@gmail.com
+                  </a>
+                </div>
+                <div className="text-center">
+                  <p className="text-xs font-medium text-gray-700 mb-2">讚賞碼</p>
+                  <div className="flex gap-3 justify-center">
+                    {/* 這裡可以添加讚賞碼圖片或 QR Code */}
+                    <div className="bg-white p-2 rounded border border-gray-200">
+                      <p className="text-xs text-gray-500">LinePay</p>
+                    </div>
+                    <div className="bg-white p-2 rounded border border-gray-200">
+                      <p className="text-xs text-gray-500">全支付</p>
+                    </div>
+                    <div className="bg-white p-2 rounded border border-gray-200">
+                      <p className="text-xs text-gray-500">富邦</p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -261,7 +297,7 @@ const Dashboard = () => {
                 onClick={handleCloseWelcomeGuide}
                 className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
               >
-                {t('dashboard.iKnow', '我知道了')}
+                我知道了
               </button>
             </div>
           </div>
@@ -271,16 +307,16 @@ const Dashboard = () => {
       <div className="space-y-6">
         {/* 投資組合儀表版 */}
         <div className="bg-white shadow rounded-lg p-6">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">{t('dashboard.title', '投資組合儀表版')}</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">投資組合儀表版</h1>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-blue-50 p-4 rounded-lg">
-              <h3 className="text-sm font-medium text-gray-600">{t('dashboard.portfolioValue', '投資組合價值')}</h3>
+              <h3 className="text-sm font-medium text-gray-600">投資組合價值</h3>
               <p className="text-2xl font-bold text-gray-900">
                 ${holdingsStats.totalMarketValue.toFixed(2)}
               </p>
             </div>
             <div className="bg-green-50 p-4 rounded-lg">
-              <h3 className="text-sm font-medium text-gray-600">{t('dashboard.totalCost', '總成本')}</h3>
+              <h3 className="text-sm font-medium text-gray-600">總成本</h3>
               <p className="text-2xl font-bold text-gray-900">
                 ${holdingsStats.totalCost.toFixed(2)}
               </p>
@@ -288,7 +324,7 @@ const Dashboard = () => {
             <div className={`p-4 rounded-lg ${
               holdingsStats.totalProfitLoss >= 0 ? 'bg-green-50' : 'bg-red-50'
             }`}>
-              <h3 className="text-sm font-medium text-gray-600">{t('dashboard.profitLoss', '損益')}</h3>
+              <h3 className="text-sm font-medium text-gray-600">損益</h3>
               <p className={`text-2xl font-bold ${
                 holdingsStats.totalProfitLoss >= 0 ? 'text-green-900' : 'text-red-900'
               }`}>
@@ -296,7 +332,7 @@ const Dashboard = () => {
               </p>
             </div>
             <div className="bg-purple-50 p-4 rounded-lg">
-              <h3 className="text-sm font-medium text-gray-600">{t('dashboard.dividendIncome', '股息收入（本年度累計）')}</h3>
+              <h3 className="text-sm font-medium text-gray-600">股息收入（本年度累計）</h3>
               <p className="text-2xl font-bold text-gray-900">
                 ${dividendStats.totalDividend.toFixed(2)}
               </p>
@@ -304,13 +340,13 @@ const Dashboard = () => {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
             <div className="bg-yellow-50 p-4 rounded-lg">
-              <h3 className="text-sm font-medium text-gray-600">{t('dashboard.bankTotal', '銀行總額')}</h3>
+              <h3 className="text-sm font-medium text-gray-600">銀行總額</h3>
               <p className="text-2xl font-bold text-gray-900">
                 ${bankStats.totalBalance.toFixed(2)}
               </p>
             </div>
             <div className="bg-blue-50 p-4 rounded-lg">
-              <h3 className="text-sm font-medium text-gray-600">{t('dashboard.availableBalance', '可用餘額')}</h3>
+              <h3 className="text-sm font-medium text-gray-600">可用餘額</h3>
               <p className="text-2xl font-bold text-gray-900">
                 ${bankStats.availableBalance.toFixed(2)}
               </p>
@@ -321,21 +357,21 @@ const Dashboard = () => {
         {/* 快捷功能 */}
         <div className="bg-white shadow rounded-lg p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-gray-900">{t('dashboard.quickFunctions', '快捷功能')}</h2>
+            <h2 className="text-xl font-bold text-gray-900">快捷功能</h2>
             <div className="flex items-center space-x-2">
-              <span className="text-sm text-gray-700">{t('dashboard.show', '顯示：')}</span>
+              <span className="text-sm text-gray-700">顯示：</span>
               <select
                 value={quickShortcutFilter}
                 onChange={(e) => setQuickShortcutFilter(e.target.value)}
                 className="px-2 py-1 border border-gray-300 rounded-md text-sm"
               >
-                <option value="all">{t('dashboard.all', '全部')}</option>
-                <option value="trade">{t('dashboard.tradeRelated', '交易相關')}</option>
-                <option value="holdings">{t('dashboard.holdingsPortfolio', '庫存 / 投資組合')}</option>
-                <option value="income">{t('dashboard.incomeSettlement', '收益 / 交割')}</option>
-                <option value="bank">{t('dashboard.bankAccount', '銀行帳戶')}</option>
-                <option value="search">{t('dashboard.searchGuide', '查詢 / 指南')}</option>
-                <option value="settings">{t('dashboard.systemSettings', '系統設定')}</option>
+                <option value="all">全部</option>
+                <option value="trade">交易相關</option>
+                <option value="holdings">庫存 / 投資組合</option>
+                <option value="income">收益 / 交割</option>
+                <option value="bank">銀行帳戶</option>
+                <option value="search">查詢 / 指南</option>
+                <option value="settings">系統設定</option>
               </select>
             </div>
           </div>
@@ -346,7 +382,7 @@ const Dashboard = () => {
                 className="bg-blue-50 hover:bg-blue-100 p-4 rounded-lg text-center transition-colors"
               >
                 <div className="text-2xl mb-2">📝</div>
-                <div className="text-sm font-medium text-gray-700">{t('dashboard.addTransaction', '新增交易')}</div>
+                <div className="text-sm font-medium text-gray-700">新增交易</div>
               </Link>
             )}
             {(quickShortcutFilter === 'all' || quickShortcutFilter === 'holdings') && (
@@ -355,7 +391,7 @@ const Dashboard = () => {
                 className="bg-green-50 hover:bg-green-100 p-4 rounded-lg text-center transition-colors"
               >
                 <div className="text-2xl mb-2">📊</div>
-                <div className="text-sm font-medium text-gray-700">{t('menu.holdings', '庫存管理')}</div>
+                <div className="text-sm font-medium text-gray-700">庫存管理</div>
               </Link>
             )}
             {(quickShortcutFilter === 'all' || quickShortcutFilter === 'holdings') && (
@@ -364,7 +400,7 @@ const Dashboard = () => {
                 className="bg-purple-50 hover:bg-purple-100 p-4 rounded-lg text-center transition-colors"
               >
                 <div className="text-2xl mb-2">💼</div>
-                <div className="text-sm font-medium text-gray-700">{t('menu.portfolio', '投資組合')}</div>
+                <div className="text-sm font-medium text-gray-700">投資組合</div>
               </Link>
             )}
             {(quickShortcutFilter === 'all' || quickShortcutFilter === 'income') && (
@@ -373,7 +409,7 @@ const Dashboard = () => {
                 className="bg-yellow-50 hover:bg-yellow-100 p-4 rounded-lg text-center transition-colors"
               >
                 <div className="text-2xl mb-2">💰</div>
-                <div className="text-sm font-medium text-gray-700">{t('menu.dividends', '歷史收益')}</div>
+                <div className="text-sm font-medium text-gray-700">歷史收益</div>
               </Link>
             )}
             {(quickShortcutFilter === 'all' || quickShortcutFilter === 'income') && (
@@ -382,7 +418,7 @@ const Dashboard = () => {
                 className="bg-orange-50 hover:bg-orange-100 p-4 rounded-lg text-center transition-colors"
               >
                 <div className="text-2xl mb-2">📄</div>
-                <div className="text-sm font-medium text-gray-700">{t('menu.settlements', '交割管理')}</div>
+                <div className="text-sm font-medium text-gray-700">交割管理</div>
               </Link>
             )}
             {(quickShortcutFilter === 'all' || quickShortcutFilter === 'bank') && (
@@ -391,7 +427,7 @@ const Dashboard = () => {
                 className="bg-teal-50 hover:bg-teal-100 p-4 rounded-lg text-center transition-colors"
               >
                 <div className="text-2xl mb-2">🏦</div>
-                <div className="text-sm font-medium text-gray-700">{t('bankAccounts.title', '銀行帳戶管理')}</div>
+                <div className="text-sm font-medium text-gray-700">銀行帳戶管理</div>
               </Link>
             )}
             {(quickShortcutFilter === 'all' || quickShortcutFilter === 'search') && (
@@ -400,7 +436,7 @@ const Dashboard = () => {
                 className="bg-indigo-50 hover:bg-indigo-100 p-4 rounded-lg text-center transition-colors"
               >
                 <div className="text-2xl mb-2">🔍</div>
-                <div className="text-sm font-medium text-gray-700">{t('menu.stockAnnouncements', '個股查詢')}</div>
+                <div className="text-sm font-medium text-gray-700">個股查詢</div>
               </Link>
             )}
             {(quickShortcutFilter === 'all' || quickShortcutFilter === 'search') && (
@@ -409,7 +445,7 @@ const Dashboard = () => {
                 className="bg-pink-50 hover:bg-pink-100 p-4 rounded-lg text-center transition-colors"
               >
                 <div className="text-2xl mb-2">📖</div>
-                <div className="text-sm font-medium text-gray-700">{t('menu.welcomeGuide', '使用指南')}</div>
+                <div className="text-sm font-medium text-gray-700">使用指南</div>
               </Link>
             )}
             {(quickShortcutFilter === 'all' || quickShortcutFilter === 'trade') && (
@@ -418,7 +454,7 @@ const Dashboard = () => {
                 className="bg-cyan-50 hover:bg-cyan-100 p-4 rounded-lg text-center transition-colors"
               >
                 <div className="text-2xl mb-2">📋</div>
-                <div className="text-sm font-medium text-gray-700">{t('dashboard.addSecuritiesAccount', '證券帳戶')}</div>
+                <div className="text-sm font-medium text-gray-700">證券帳戶</div>
               </Link>
             )}
             {(quickShortcutFilter === 'all' || quickShortcutFilter === 'settings') && (
@@ -427,7 +463,7 @@ const Dashboard = () => {
                 className="bg-gray-50 hover:bg-gray-100 p-4 rounded-lg text-center transition-colors"
               >
                 <div className="text-2xl mb-2">⚙️</div>
-                <div className="text-sm font-medium text-gray-700">{t('menu.settings', '系統設定')}</div>
+                <div className="text-sm font-medium text-gray-700">系統設定</div>
               </Link>
             )}
           </div>
@@ -436,27 +472,27 @@ const Dashboard = () => {
         {/* 最近交易紀錄 */}
         <div className="bg-white shadow rounded-lg p-6">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold text-gray-900">{t('dashboard.recentTransactions', '最近交易紀錄')}</h2>
+            <h2 className="text-xl font-bold text-gray-900">最近交易紀錄</h2>
             <Link
               to="/transactions"
               className="text-blue-600 hover:text-blue-800 text-sm font-medium"
             >
-              {t('dashboard.viewAll', '查看全部')} →
+              查看全部 →
             </Link>
           </div>
           {recentTransactions.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">{t('dashboard.noTransactions', '尚無交易記錄')}</div>
+            <div className="text-center py-8 text-gray-500">尚無交易記錄</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('dashboard.tradeDate', '成交日期')}</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('dashboard.type', '種類')}</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('dashboard.code', '代號')}</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('dashboard.productName', '商品名稱')}</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('dashboard.quantity', '數量')}</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('dashboard.price', '成交價')}</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">成交日期</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">種類</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">代號</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">商品名稱</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">數量</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">成交價</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">

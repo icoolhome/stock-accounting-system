@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useLanguage } from '../contexts/LanguageContext';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import * as XLSX from 'xlsx';
@@ -37,7 +36,6 @@ interface SystemLog {
 }
 
 const Admin = () => {
-  const { t } = useLanguage();
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('users');
   const [loading, setLoading] = useState(false);
@@ -109,18 +107,18 @@ const Admin = () => {
   };
 
   const handleDeleteUser = async (userId: number) => {
-    if (!window.confirm(t('admin.confirmDeleteUser', '確定要刪除該用戶嗎？'))) {
+    if (!window.confirm('確定要刪除該用戶嗎？')) {
       return;
     }
 
     try {
       await axios.delete(`/api/admin/users/${userId}`);
-      setSuccess(t('admin.userDeleted', '用戶已刪除'));
+      setSuccess('用戶已刪除');
       fetchUsers();
       fetchUserStats();
       setTimeout(() => setSuccess(''), 3000);
     } catch (err: any) {
-      setError(err.response?.data?.message || t('admin.deleteUserFailed', '刪除用戶失敗'));
+      setError(err.response?.data?.message || '刪除用戶失敗');
       setTimeout(() => setError(''), 3000);
     }
   };
@@ -148,7 +146,7 @@ const Admin = () => {
     try {
       setLoading(true);
       await axios.post('/api/admin/admin/create', newAdmin);
-      setSuccess(t('admin.adminCreated', '管理員已創建'));
+      setSuccess('管理員已創建');
       setShowAddAdminModal(false);
       setNewAdmin({ email: '', password: '' });
       fetchAdmins();
@@ -162,7 +160,7 @@ const Admin = () => {
   };
 
   const handleEditAdmin = (admin: Admin) => {
-    if (!window.confirm(t('admin.confirmEditAdmin', '確定要編輯該管理員嗎？'))) {
+    if (!window.confirm('確定要編輯該管理員嗎？')) {
       return;
     }
     setEditingAdmin(admin);
@@ -184,7 +182,7 @@ const Admin = () => {
         updateData.password = editAdmin.password.trim();
       }
       await axios.put(`/api/admin/admin/${editingAdmin.id}`, updateData);
-      setSuccess(t('admin.adminUpdated', '管理員已更新'));
+      setSuccess('管理員已更新');
       setShowEditAdminModal(false);
       setEditingAdmin(null);
       setEditAdmin({ email: '', password: '' });
@@ -210,7 +208,7 @@ const Admin = () => {
         updateData.password = updateAdminForm.password.trim();
       }
       await axios.put('/api/admin/admin/current', updateData);
-      setSuccess(t('admin.settingsUpdatedRelogin', '設定已更新，請重新登入'));
+      setSuccess('設定已更新，請重新登入');
       setUpdateAdminForm({ email: '', password: '' });
       setTimeout(() => {
         setSuccess('');
@@ -232,7 +230,7 @@ const Admin = () => {
       setLoading(true);
       const response = await axios.post('/api/admin/diagnostics');
       setDiagnostics(response.data.data);
-      setSuccess(t('admin.diagnosticsCompleted', '系統診斷完成'));
+      setSuccess('系統診斷完成');
       fetchLogs();
       setTimeout(() => setSuccess(''), 3000);
     } catch (err: any) {
@@ -259,17 +257,17 @@ const Admin = () => {
   };
 
   const handleDeleteLog = async (logId: number) => {
-    if (!window.confirm(t('admin.confirmDeleteLog', '確定要刪除該日誌嗎？'))) {
+    if (!window.confirm('確定要刪除該日誌嗎？')) {
       return;
     }
 
     try {
       await axios.delete(`/api/admin/logs/${logId}`);
-      setSuccess(t('admin.logDeleted', '日誌已刪除'));
+      setSuccess('日誌已刪除');
       fetchLogs();
       setTimeout(() => setSuccess(''), 3000);
     } catch (err: any) {
-      setError(err.response?.data?.message || t('admin.deleteLogFailed', '刪除日誌失敗'));
+      setError(err.response?.data?.message || '刪除日誌失敗');
       setTimeout(() => setError(''), 3000);
     }
   };
@@ -331,17 +329,17 @@ const Admin = () => {
       ws['!cols'] = colWidths;
 
       // 添加工作表到工作簿
-      XLSX.utils.book_append_sheet(wb, ws, t('admin.systemLogsSheet', '系統日誌'));
+      XLSX.utils.book_append_sheet(wb, ws, '系統日誌');
 
       // 生成文件名（包含日期）
-      const fileName = `${t('admin.systemLogsFileName', '系統日誌')}_${format(new Date(), 'yyyy-MM-dd_HHmmss')}.xlsx`;
+      const fileName = `系統日誌_${format(new Date(), 'yyyy-MM-dd_HHmmss')}.xlsx`;
 
       // 下載文件
       XLSX.writeFile(wb, fileName);
-      setSuccess(t('admin.exportLogsSuccess', '日誌匯出成功'));
+      setSuccess('日誌匯出成功');
       setTimeout(() => setSuccess(''), 3000);
     } catch (err: any) {
-      setError(err.response?.data?.message || t('admin.exportLogsFailed', '匯出日誌失敗'));
+      setError(err.response?.data?.message || '匯出日誌失敗');
       setTimeout(() => setError(''), 3000);
     } finally {
       setLoading(false);
@@ -351,22 +349,22 @@ const Admin = () => {
   // 刪除全部業務數據（不含用戶與管理員帳號）
   const handlePurgeAllData = async () => {
     const first = window.confirm(
-      t('admin.confirmPurgeAllData', '此操作將刪除所有交易、庫存、交割、股息、銀行帳戶、幣別設定、系統日誌與證交所除權除息資料，且無法復原。確定要繼續嗎？')
+      '此操作將刪除所有交易、庫存、交割、股息、銀行帳戶、幣別設定、系統日誌與證交所除權除息資料，且無法復原。確定要繼續嗎？'
     );
     if (!first) return;
-    const second = window.confirm(t('admin.confirmPurgeAllDataSecond', '再次確認：確定要刪除全部業務數據嗎？此動作無法還原，請謹慎操作。'));
+    const second = window.confirm('再次確認：確定要刪除全部業務數據嗎？此動作無法還原，請謹慎操作。');
     if (!second) return;
 
     try {
       setPurging(true);
       const response = await axios.post('/api/admin/purge');
-      setSuccess(response.data?.message || t('admin.allDataPurged', '已刪除全部業務數據'));
+      setSuccess(response.data?.message || '已刪除全部業務數據');
       // 重新載入基本統計與日誌
       fetchUserStats();
       fetchUsers();
       fetchLogs();
     } catch (err: any) {
-      setError(err.response?.data?.message || t('admin.purgeAllDataFailed', '刪除全部數據失敗'));
+      setError(err.response?.data?.message || '刪除全部數據失敗');
     } finally {
       setPurging(false);
       setTimeout(() => {
@@ -403,7 +401,7 @@ const Admin = () => {
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold text-gray-900">{t('admin.title', '後台管理')}</h1>
+      <h1 className="text-2xl font-bold text-gray-800 mb-6">後台管理</h1>
 
       {error && (
         <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
@@ -467,7 +465,7 @@ const Admin = () => {
               <div className="text-2xl font-bold text-gray-800">{userStats.activeUsers}</div>
             </div>
             <div className="bg-white p-4 rounded-lg shadow">
-              <div className="text-sm text-gray-500">{t('admin.todayNew', '今日新增')}</div>
+              <div className="text-sm text-gray-500">今日新增</div>
               <div className="text-2xl font-bold text-gray-800">{userStats.todayNewUsers}</div>
             </div>
           </div>
@@ -515,7 +513,7 @@ const Admin = () => {
                 {loading ? (
                   <tr>
                     <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
-                      {t('common.loading', '載入中...')}
+                      載入中...
                     </td>
                   </tr>
                 ) : users.length === 0 ? (
@@ -748,7 +746,7 @@ const Admin = () => {
           {showAddAdminModal && (
             <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
               <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-                <h3 className="text-lg font-bold text-gray-900 mb-4">{t('admin.addAdmin', '新增管理員')}</h3>
+                <h3 className="text-lg font-bold text-gray-900 mb-4">新增管理員</h3>
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">郵箱</label>
@@ -775,16 +773,16 @@ const Admin = () => {
                         setNewAdmin({ email: '', password: '' });
                       }}
                       className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
-                      >
-                        {t('common.cancel', '取消')}
-                      </button>
-                      <button
-                        onClick={handleAddAdmin}
-                        disabled={loading || !newAdmin.email || !newAdmin.password}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
-                      >
-                        {t('common.add', '新增')}
-                      </button>
+                    >
+                      取消
+                    </button>
+                    <button
+                      onClick={handleAddAdmin}
+                      disabled={loading || !newAdmin.email || !newAdmin.password}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      新增
+                    </button>
                   </div>
                 </div>
               </div>
@@ -795,7 +793,7 @@ const Admin = () => {
           {showEditAdminModal && editingAdmin && (
             <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
               <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-                <h3 className="text-lg font-bold text-gray-900 mb-4">{t('admin.editAdmin', '編輯管理員')}</h3>
+                <h3 className="text-lg font-bold text-gray-900 mb-4">編輯管理員</h3>
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -875,84 +873,20 @@ const Admin = () => {
             {diagnostics && (
               <div className="mt-6">
                 <h3 className="text-md font-semibold text-gray-800 mb-4">診斷結果</h3>
-                {(() => {
-                  // 按分類分組
-                  const categories = diagnostics.checks.reduce((acc: any, check: any) => {
-                    const category = check.category || '其他';
-                    if (!acc[category]) {
-                      acc[category] = [];
-                    }
-                    acc[category].push(check);
-                    return acc;
-                  }, {});
-
-                  return (
-                    <div className="space-y-6">
-                      {Object.keys(categories).map((category) => (
-                        <div key={category} className="border border-gray-200 rounded-lg p-4">
-                          <h4 className="text-sm font-semibold text-gray-700 mb-3 pb-2 border-b border-gray-200">
-                            {category}
-                          </h4>
-                          <div className="space-y-2">
-                            {categories[category].map((check: any, index: number) => {
-                              let bgColor = 'bg-gray-50 text-gray-800';
-                              let borderColor = 'border-gray-300';
-                              if (check.status === 'success') {
-                                bgColor = 'bg-green-50 text-green-800';
-                                borderColor = 'border-green-200';
-                              } else if (check.status === 'error') {
-                                bgColor = 'bg-red-50 text-red-800';
-                                borderColor = 'border-red-200';
-                              } else if (check.status === 'warning') {
-                                bgColor = 'bg-yellow-50 text-yellow-800';
-                                borderColor = 'border-yellow-200';
-                              }
-
-                              return (
-                                <div
-                                  key={index}
-                                  className={`p-3 rounded border ${bgColor} ${borderColor}`}
-                                >
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                      {check.status === 'success' && (
-                                        <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                        </svg>
-                                      )}
-                                      {check.status === 'error' && (
-                                        <svg className="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
-                                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                                        </svg>
-                                      )}
-                                      {check.status === 'warning' && (
-                                        <svg className="w-5 h-5 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
-                                          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                                        </svg>
-                                      )}
-                                      <strong className="font-medium">{check.name}</strong>
-                                    </div>
-                                    <span className="text-sm">{check.message}</span>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ))}
+                <div className="space-y-2">
+                  {diagnostics.checks.map((check: any, index: number) => (
+                    <div
+                      key={index}
+                      className={`p-3 rounded ${
+                        check.status === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
+                      }`}
+                    >
+                      <strong>{check.name}:</strong> {check.message}
                     </div>
-                  );
-                })()}
-                <div className="mt-4 pt-4 border-t border-gray-200">
-                  <div className="flex items-center justify-between text-sm text-gray-500">
-                    <span>診斷時間：{new Date(diagnostics.timestamp).toLocaleString('zh-TW')}</span>
-                    <span>
-                      總檢查項目：{diagnostics.checks.length} 項 | 
-                      成功：{diagnostics.checks.filter((c: any) => c.status === 'success').length} | 
-                      警告：{diagnostics.checks.filter((c: any) => c.status === 'warning').length} | 
-                      錯誤：{diagnostics.checks.filter((c: any) => c.status === 'error').length}
-                    </span>
-                  </div>
+                  ))}
+                </div>
+                <div className="mt-4 text-sm text-gray-500">
+                  診斷時間：{new Date(diagnostics.timestamp).toLocaleString('zh-TW')}
                 </div>
               </div>
             )}

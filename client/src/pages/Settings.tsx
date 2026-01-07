@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
-import { useLanguage } from '../contexts/LanguageContext';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import * as XLSX from 'xlsx';
@@ -16,7 +15,6 @@ interface Currency {
 
 const Settings = () => {
   const { user } = useAuth();
-  const { t, setLanguage } = useLanguage();
   const [activeTab, setActiveTab] = useState('api');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -40,14 +38,7 @@ const Settings = () => {
   // 介面設定
   const [uiSettings, setUiSettings] = useState({
     fontSize: '16px',
-    language: 'zh-TW', // 預設語言
   });
-
-  // 語言包設定
-  const [languagePacks, setLanguagePacks] = useState<any[]>([]);
-  const [currentLanguage, setCurrentLanguage] = useState('zh-TW');
-  const [editingPack, setEditingPack] = useState<any>(null);
-  const [editTranslations, setEditTranslations] = useState<Record<string, string>>({});
 
   // 手續費設定
   const [feeSettings, setFeeSettings] = useState({
@@ -68,7 +59,6 @@ const Settings = () => {
     exchange_rate: 1.0,
     is_default: false,
   });
-
 
   // 密碼設定
   const [passwordSettings, setPasswordSettings] = useState({
@@ -112,15 +102,7 @@ const Settings = () => {
     fetchCurrencies();
     fetchStockStats();
     fetchExchangeRates();
-    fetchLanguagePacks();
   }, []);
-
-  // 當 uiSettings 變化時同步 currentLanguage
-  useEffect(() => {
-    if (uiSettings.language && uiSettings.language !== currentLanguage) {
-      setCurrentLanguage(uiSettings.language);
-    }
-  }, [uiSettings.language]);
 
   const fetchSettings = async () => {
     try {
@@ -129,13 +111,7 @@ const Settings = () => {
 
       if (settings.apiSettings) setApiSettings(settings.apiSettings);
       if (settings.tradingSettings) setTradingSettings(settings.tradingSettings);
-      if (settings.uiSettings) {
-        setUiSettings(settings.uiSettings);
-        // 同步 currentLanguage 與 uiSettings.language
-        if (settings.uiSettings.language) {
-          setCurrentLanguage(settings.uiSettings.language);
-        }
-      }
+      if (settings.uiSettings) setUiSettings(settings.uiSettings);
       if (settings.feeSettings) setFeeSettings(settings.feeSettings);
     } catch (err: any) {
       console.error('獲取設定失敗:', err);
@@ -181,29 +157,6 @@ const Settings = () => {
       }
     } catch (err: any) {
       console.error('獲取匯率失敗:', err);
-    }
-  };
-
-  const fetchLanguagePacks = async () => {
-    try {
-      const response = await axios.get('/api/settings/language-packs');
-      if (response.data.success) {
-        setLanguagePacks(response.data.data || []);
-        // 查找預設語言包
-        const defaultPack = response.data.data?.find((p: any) => p.is_default === 1);
-        if (defaultPack) {
-          setCurrentLanguage(defaultPack.language_code);
-          // 同步 uiSettings.language
-          setUiSettings(prev => ({ ...prev, language: defaultPack.language_code }));
-        } else {
-          // 如果沒有預設語言包，檢查 uiSettings 中的語言設定
-          if (uiSettings.language) {
-            setCurrentLanguage(uiSettings.language);
-          }
-        }
-      }
-    } catch (err: any) {
-      console.error('獲取語言包列表失敗:', err);
     }
   };
 
@@ -265,10 +218,6 @@ const Settings = () => {
       // 獲取歷史收益
       const dividendsResponse = await axios.get('/api/dividends');
       const dividends = dividendsResponse.data.data || [];
-      
-      // 獲取銀行明細
-      const bankTransactionsResponse = await axios.get('/api/bank-transactions');
-      const bankTransactions = bankTransactionsResponse.data.data || [];
       
       // 獲取庫存管理（計算結果）
       const holdingsResponse = await axios.get('/api/holdings');
@@ -357,15 +306,6 @@ const Settings = () => {
           share_count: dividend.share_count,
           source: dividend.source,
           description: dividend.description,
-        })),
-        bankTransactions: bankTransactions.map((bt: any) => ({
-          bank_name: bt.bank_name,
-          bank_account_number: bt.account_number,
-          transaction_date: bt.transaction_date,
-          description: bt.description,
-          transaction_category: bt.transaction_category,
-          deposit_amount: bt.deposit_amount,
-          withdrawal_amount: bt.withdrawal_amount,
         })),
         holdings: holdings.map((holding: any) => ({
           account_name: holding.account_name,
@@ -721,46 +661,6 @@ const Settings = () => {
         }
       }
 
-      // 載入銀行明細（需要使用銀行帳戶ID映射）
-      if (importData.bankTransactions && Array.isArray(importData.bankTransactions)) {
-        for (const bt of importData.bankTransactions) {
-          try {
-            // 查找對應的銀行帳戶ID
-            let bankAccountId = null;
-            if (bt.bank_name && bt.bank_account_number) {
-              const key = `${bt.bank_name}|${bt.bank_account_number}`;
-              bankAccountId = bankAccountMap.get(key) || null;
-              if (!bankAccountId) {
-                // 如果映射中沒有，嘗試從已獲取的帳戶列表中查找
-                const matchedAccount = allBankAccounts.find((acc: any) => 
-                  acc.bank_name === bt.bank_name && 
-                  acc.account_number === bt.bank_account_number
-                );
-                if (matchedAccount) {
-                  bankAccountId = matchedAccount.id;
-                }
-              }
-            }
-
-            if (!bankAccountId) {
-              console.warn('銀行明細導入失敗: 找不到對應的銀行帳戶', bt.bank_name, bt.bank_account_number);
-              continue;
-            }
-
-            await axios.post('/api/bank-transactions', {
-              bank_account_id: bankAccountId,
-              transaction_date: bt.transaction_date,
-              description: bt.description || null,
-              transaction_category: bt.transaction_category || null,
-              deposit_amount: bt.deposit_amount || 0,
-              withdrawal_amount: bt.withdrawal_amount || 0,
-            });
-          } catch (err: any) {
-            console.warn('銀行明細導入失敗:', bt.transaction_date, err.response?.data?.message || err.message);
-          }
-        }
-      }
-
       // 注意：庫存管理（holdings）是計算結果，不需要導入
 
       e.target.value = ''; // 重置文件輸入
@@ -768,7 +668,7 @@ const Settings = () => {
       setSuccess('完整備份檔案載入成功');
       setTimeout(() => setSuccess(''), 3000);
     } catch (err: any) {
-      setError(err.response?.data?.message || err.message || t('settings.importFailed', '載入設定檔案失敗'));
+      setError(err.response?.data?.message || err.message || '載入設定檔案失敗');
       setTimeout(() => setError(''), 3000);
       e.target.value = ''; // 重置文件輸入
       setSelectedFileName('');
@@ -1057,156 +957,22 @@ const Settings = () => {
     };
   };
 
-  // 語言包管理函數
-  const handleUploadLanguagePack = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) {
-      setSelectedFileName('');
-      return;
-    }
-
-    setSelectedFileName(file.name);
-
-    try {
-      setLoading(true);
-      setError('');
-      
-      const text = await file.text();
-      const packData = JSON.parse(text);
-
-      if (!packData.language_code || !packData.language_name || !packData.translations) {
-        throw new Error('語言包格式不正確，必須包含 language_code、language_name 和 translations 欄位');
-      }
-
-      await axios.post('/api/settings/language-packs', packData);
-      setSuccess('語言包上傳成功');
-      setTimeout(() => setSuccess(''), 3000);
-      await fetchLanguagePacks();
-    } catch (err: any) {
-      setError(err.response?.data?.message || err.message || '上傳語言包失敗');
-      setTimeout(() => setError(''), 3000);
-    } finally {
-      setLoading(false);
-      e.target.value = '';
-      setSelectedFileName('');
-    }
-  };
-
-  const handleDownloadLanguagePack = async (languageCode: string) => {
-    try {
-      setLoading(true);
-      const response = await axios.get(`/api/settings/language-packs/${languageCode}`);
-      
-      if (response.data.success) {
-        const pack = response.data.data;
-        const exportData = {
-          language_code: pack.language_code,
-          language_name: pack.language_name,
-          translations: pack.translations,
-          is_default: pack.is_default === 1,
-        };
-
-        const jsonStr = JSON.stringify(exportData, null, 2);
-        const blob = new Blob([jsonStr], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `language_pack_${pack.language_code}.json`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-
-        setSuccess('語言包下載成功');
-      }
-    } catch (err: any) {
-      setError(err.response?.data?.message || '下載語言包失敗');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleEditLanguagePack = async (languageCode: string) => {
-    try {
-      setLoading(true);
-      const response = await axios.get(`/api/settings/language-packs/${languageCode}`);
-      
-      if (response.data.success) {
-        const pack = response.data.data;
-        setEditingPack(pack);
-        setEditTranslations(pack.translations || {});
-      }
-    } catch (err: any) {
-      setError(err.response?.data?.message || '獲取語言包失敗');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSaveLanguagePack = async () => {
-    if (!editingPack) return;
-
-    try {
-      setLoading(true);
-      setError('');
-      
-      await axios.post('/api/settings/language-packs', {
-        language_code: editingPack.language_code,
-        language_name: editingPack.language_name,
-        translations: editTranslations,
-        is_default: editingPack.is_default === 1,
-      });
-
-      setSuccess('語言包保存成功');
-      setEditingPack(null);
-      setEditTranslations({});
-      await fetchLanguagePacks();
-    } catch (err: any) {
-      setError(err.response?.data?.message || '保存語言包失敗');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeleteLanguagePack = async (languageCode: string) => {
-    if (!confirm('確定要刪除此語言包嗎？')) return;
-
-    try {
-      await axios.delete(`/api/settings/language-packs/${languageCode}`);
-      setSuccess('語言包刪除成功');
-      await fetchLanguagePacks();
-    } catch (err: any) {
-      setError(err.response?.data?.message || '刪除語言包失敗');
-    }
-  };
-
-  const handleSetDefaultLanguage = async (languageCode: string) => {
-    try {
-      await axios.put(`/api/settings/language-packs/${languageCode}/default`);
-      setSuccess('預設語言設置成功');
-      await fetchLanguagePacks();
-    } catch (err: any) {
-      setError(err.response?.data?.message || '設置預設語言失敗');
-    }
-  };
-
   const tabs = [
-    { id: 'api', label: t('settings.apiSettings', 'API設定') },
-    { id: 'currency', label: t('settings.currencySettings', '幣別設定') },
-    { id: 'trading', label: t('settings.tradingSettings', '交易設定') },
-    { id: 'ui', label: t('settings.uiSettings', '介面設定') },
-    { id: 'fee', label: t('settings.feeSettings', '手續費設定') },
-    { id: 'file', label: t('settings.fileManagement', '檔案') },
-    { id: 'language', label: t('settings.languageSettings', '語言設定') },
-    { id: 'password', label: t('settings.passwordSettings', '密碼設定') },
-    { id: 'email', label: t('settings.emailSettings', '郵箱設定') },
-    { id: 'accounts', label: t('settings.accountManagement', '帳戶相關') },
+    { id: 'api', label: 'API設定' },
+    { id: 'currency', label: '幣別設定' },
+    { id: 'trading', label: '交易設定' },
+    { id: 'ui', label: '介面設定' },
+    { id: 'fee', label: '手續費設定' },
+    { id: 'file', label: '檔案' },
+    { id: 'password', label: '密碼設定' },
+    { id: 'email', label: '郵箱設定' },
+    { id: 'accounts', label: '帳戶相關' },
   ];
 
   return (
     <div className="px-4 py-6 sm:px-0">
       <div className="bg-white shadow rounded-lg p-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">{t('settings.title', '系統設定')}</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">系統設定</h1>
 
         {error && (
           <div className="bg-red-50 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
@@ -1703,30 +1469,6 @@ const Settings = () => {
                 <option value="20px">特大（20px）</option>
               </select>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">語言選擇</label>
-              <select
-                value={currentLanguage}
-                onChange={(e) => {
-                  setCurrentLanguage(e.target.value);
-                  setUiSettings({ ...uiSettings, language: e.target.value });
-                }}
-                className="px-3 py-2 border border-gray-300 rounded-md"
-                style={{ width: '10cm' }}
-              >
-                {languagePacks.map((pack) => (
-                  <option key={pack.language_code} value={pack.language_code}>
-                    {pack.language_name} ({pack.language_code}){pack.is_default === 1 ? ' [預設]' : ''}
-                  </option>
-                ))}
-                {languagePacks.length === 0 && (
-                  <option value="zh-TW">繁體中文 (zh-TW) [預設]</option>
-                )}
-              </select>
-              <p className="mt-1 text-sm text-gray-500">
-                選擇系統顯示語言（可在「語言設定」標籤中管理語言包）
-              </p>
-            </div>
             <div className="bg-gray-50 p-4 rounded-lg">
               <h3 className="text-sm font-medium text-gray-700 mb-2">預覽</h3>
               <p style={{ fontSize: uiSettings.fontSize }}>
@@ -1743,498 +1485,13 @@ const Settings = () => {
           </div>
         )}
 
-        {/* 語言設定 */}
-        {activeTab === 'language' && (
-          <div className="space-y-6">
-            {/* 語言選擇框 */}
-            <div className="border border-gray-200 rounded-lg p-4">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('language.currentSelection', '當前語言選擇')}</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('language.systemLanguage', '系統顯示語言')}</label>
-                  <select
-                    value={currentLanguage}
-                    onChange={(e) => {
-                      setCurrentLanguage(e.target.value);
-                      setUiSettings({ ...uiSettings, language: e.target.value });
-                    }}
-                    className="px-3 py-2 border border-gray-300 rounded-md"
-                    style={{ width: '100%', maxWidth: '20cm' }}
-                  >
-                    {/* 始終顯示預設的三種語言選項 */}
-                    <option value="zh-TW">{t('menu.language.zhTW', '繁體中文')} (zh-TW){languagePacks.find(p => p.language_code === 'zh-TW' && p.is_default === 1) ? ` [${t('language.default', '預設')}]` : ''}</option>
-                    <option value="zh-CN">{t('menu.language.zhCN', '簡體中文')} (zh-CN){languagePacks.find(p => p.language_code === 'zh-CN' && p.is_default === 1) ? ` [${t('language.default', '預設')}]` : ''}</option>
-                    <option value="en">{t('menu.language.en', 'English')} (en){languagePacks.find(p => p.language_code === 'en' && p.is_default === 1) ? ` [${t('language.default', '預設')}]` : ''}</option>
-                    {/* 顯示其他已上傳的語言包（排除預設的三種） */}
-                    {languagePacks.filter(p => p.language_code !== 'zh-TW' && p.language_code !== 'zh-CN' && p.language_code !== 'en').map((pack) => (
-                      <option key={pack.language_code} value={pack.language_code}>
-                        {pack.language_name} ({pack.language_code}){pack.is_default === 1 ? ` [${t('language.default', '預設')}]` : ''}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="mt-1 text-sm text-gray-500">
-                    {t('language.systemLanguageDesc', '選擇系統顯示語言，更改後將應用到整個系統界面')}
-                  </p>
-                </div>
-                <button
-                  onClick={async () => {
-                    try {
-                      setLoading(true);
-                      setError('');
-                      setSuccess('');
-                      
-                      // 首先確保該語言包已存在並設置為預設
-                      const selectedLangCode = uiSettings.language || currentLanguage;
-                      
-                      // 檢查該語言包是否存在
-                      let packExists = languagePacks.find((p: any) => p.language_code === selectedLangCode);
-                      
-                      // 如果語言包不存在，嘗試從 public 目錄上傳預設語言包
-                      if (!packExists && (selectedLangCode === 'zh-TW' || selectedLangCode === 'zh-CN' || selectedLangCode === 'en')) {
-                        try {
-                          // 嘗試從 public 目錄加載預設語言包並上傳到數據庫
-                          const response = await fetch(`/language_pack_${selectedLangCode}.json`);
-                          if (response.ok) {
-                            const packData = await response.json();
-                            try {
-                              await axios.post('/api/settings/language-packs', {
-                                ...packData,
-                                is_default: true
-                              });
-                              packExists = true; // 標記為已存在
-                            } catch (e: any) {
-                              // 如果已經存在，嘗試更新為預設
-                              if (e.response?.status === 409 || e.response?.data?.message?.includes('已存在')) {
-                                await axios.put(`/api/settings/language-packs/${selectedLangCode}/default`);
-                                packExists = true;
-                              } else {
-                                throw e;
-                              }
-                            }
-                          }
-                        } catch (e) {
-                          console.error('上傳預設語言包失敗:', e);
-                          // 繼續執行，即使上傳失敗也可能可以使用文件中的語言包
-                        }
-                      } else if (!packExists) {
-                        // 如果不是預設的三種語言且不存在，顯示錯誤
-                        setError(t('language.packNotFound', `語言包 ${selectedLangCode} 不存在，請先上傳該語言包`));
-                        setLoading(false);
-                        return;
-                      }
-                      
-                      // 設置為預設語言包
-                      if (packExists) {
-                        try {
-                          await axios.put(`/api/settings/language-packs/${selectedLangCode}/default`);
-                        } catch (e) {
-                          console.error('設置預設語言失敗:', e);
-                        }
-                      }
-                      
-                      // 保存 uiSettings
-                      await saveSettings('uiSettings', uiSettings);
-                      
-                      // 立即更新 LanguageContext 中的語言
-                      await setLanguage(selectedLangCode);
-                      
-                      // 更新 currentLanguage
-                      setCurrentLanguage(selectedLangCode);
-                      
-                      // 重新獲取語言包列表
-                      await fetchLanguagePacks();
-                      
-                      setSuccess(t('language.saveSuccessReload', '語言設定保存成功！頁面將在 2 秒後刷新以應用新語言。'));
-                      setTimeout(() => {
-                        window.location.reload();
-                      }, 2000);
-                    } catch (err: any) {
-                      setError(err.response?.data?.message || err.message || t('language.saveFailed', '保存語言設定失敗'));
-                      setLoading(false);
-                    }
-                  }}
-                  disabled={loading}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {t('language.saveLanguageSettings', '保存語言設定')}
-                </button>
-              </div>
-            </div>
-
-            {editingPack ? (
-              /* 編輯語言包 */
-              <div className="border border-gray-200 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                  編輯語言包：{editingPack.language_name} ({editingPack.language_code})
-                </h3>
-                
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">語言名稱</label>
-                    <input
-                      type="text"
-                      value={editingPack.language_name}
-                      onChange={(e) => setEditingPack({ ...editingPack, language_name: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      placeholder="例如：繁體中文"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">翻譯內容（JSON格式）</label>
-                    <textarea
-                      value={JSON.stringify(editTranslations, null, 2)}
-                      onChange={(e) => {
-                        try {
-                          setEditTranslations(JSON.parse(e.target.value));
-                        } catch (err) {
-                          // 忽略解析錯誤，允許用戶繼續編輯
-                        }
-                      }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md font-mono text-sm"
-                      rows={15}
-                      placeholder='{"key": "value", ...}'
-                    />
-                    <p className="mt-1 text-xs text-gray-500">
-                      請輸入有效的 JSON 格式，鍵值對形式的翻譯內容
-                    </p>
-                  </div>
-
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={editingPack.is_default === 1}
-                      onChange={(e) => setEditingPack({ ...editingPack, is_default: e.target.checked ? 1 : 0 })}
-                      className="mr-2"
-                    />
-                    <label className="text-sm text-gray-700">設為預設語言</label>
-                  </div>
-
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={handleSaveLanguagePack}
-                      disabled={loading}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
-                    >
-                      保存語言包
-                    </button>
-                    <button
-                      onClick={() => {
-                        setEditingPack(null);
-                        setEditTranslations({});
-                      }}
-                      className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
-                    >
-                      取消
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <>
-                {/* 上傳和下載語言包 */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* 上傳語言包 */}
-                  <div className="border border-gray-200 rounded-lg p-4">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">上傳語言包</h3>
-                    <p className="text-sm text-gray-600 mb-4">
-                      上傳 JSON 格式的語言包文件（包含 language_code、language_name 和 translations 欄位）
-                    </p>
-                    <div className="space-y-2">
-                      <label className="block">
-                        <input
-                          type="file"
-                          accept=".json"
-                          onChange={handleUploadLanguagePack}
-                          className="hidden"
-                          id="upload-language-pack-file"
-                        />
-                        <span className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 cursor-pointer">
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="h-5 w-5 mr-2"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-                            />
-                          </svg>
-                          選擇語言包文件
-                        </span>
-                      </label>
-                      {selectedFileName ? (
-                        <p className="text-sm text-gray-700">
-                          已選擇檔案：<span className="font-medium">{selectedFileName}</span>
-                        </p>
-                      ) : (
-                        <p className="text-sm text-gray-500">未選擇檔案</p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* 下載語言包 */}
-                  <div className="border border-gray-200 rounded-lg p-4">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">下載語言包</h3>
-                    <p className="text-sm text-gray-600 mb-4">
-                      下載已上傳的語言包文件（JSON 格式）
-                    </p>
-                    <div className="space-y-2">
-                      {languagePacks.length > 0 ? (
-                        <div className="space-y-2">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">選擇要下載的語言包</label>
-                          <select
-                            onChange={(e) => {
-                              if (e.target.value) {
-                                handleDownloadLanguagePack(e.target.value);
-                                e.target.value = '';
-                              }
-                            }}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                            defaultValue=""
-                          >
-                            <option value="">請選擇語言包...</option>
-                            {languagePacks.map((pack) => (
-                              <option key={pack.language_code} value={pack.language_code}>
-                                {pack.language_name} ({pack.language_code}){pack.is_default === 1 ? ' [預設]' : ''}
-                              </option>
-                            ))}
-                          </select>
-                          <p className="text-xs text-gray-500">
-                            也可以從下方的語言包列表中直接下載
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          <p className="text-sm text-gray-500">
-                            尚無語言包可下載，請先上傳語言包
-                          </p>
-                          <button
-                            disabled
-                            className="inline-flex items-center px-4 py-2 bg-gray-400 text-white text-sm font-medium rounded-md cursor-not-allowed opacity-50"
-                          >
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              className="h-5 w-5 mr-2"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                              />
-                            </svg>
-                            下載語言包
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* 範例語言包下載 */}
-                <div className="border border-blue-200 bg-blue-50 rounded-lg p-4">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">範例語言包下載</h3>
-                  <p className="text-sm text-gray-600 mb-4">
-                    下載範例語言包文件，可作為創建新語言包的參考模板
-                  </p>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <button
-                      onClick={() => {
-                        const link = document.createElement('a');
-                        link.href = '/language_pack_zh-TW.json';
-                        link.download = 'language_pack_zh-TW.json';
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                      }}
-                      className="inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700"
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-5 w-5 mr-2"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                        />
-                      </svg>
-                      下載繁體中文範例 (zh-TW)
-                    </button>
-                    <button
-                      onClick={() => {
-                        const link = document.createElement('a');
-                        link.href = '/language_pack_zh-CN.json';
-                        link.download = 'language_pack_zh-CN.json';
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                      }}
-                      className="inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700"
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-5 w-5 mr-2"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                        />
-                      </svg>
-                      下載簡體中文範例 (zh-CN)
-                    </button>
-                    <button
-                      onClick={() => {
-                        const link = document.createElement('a');
-                        link.href = '/language_pack_en.json';
-                        link.download = 'language_pack_en.json';
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                      }}
-                      className="inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700"
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-5 w-5 mr-2"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                        />
-                      </svg>
-                      下載英文範例 (en)
-                    </button>
-                  </div>
-                </div>
-
-                {/* 語言包列表 */}
-                <div className="border border-gray-200 rounded-lg p-4">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">語言包列表</h3>
-                  
-                  {languagePacks.length === 0 ? (
-                    <p className="text-sm text-gray-500 text-center py-4">
-                      尚無語言包，請先上傳語言包
-                    </p>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                          <tr>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">語言代碼</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">語言名稱</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">預設</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">更新時間</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">操作</th>
-                          </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                          {languagePacks.map((pack) => (
-                            <tr key={pack.id}>
-                              <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {pack.language_code}
-                              </td>
-                              <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {pack.language_name}
-                              </td>
-                              <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {pack.is_default === 1 ? (
-                                  <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">是</span>
-                                ) : (
-                                  <span className="text-gray-400">否</span>
-                                )}
-                              </td>
-                              <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {pack.updated_at ? format(new Date(pack.updated_at), 'yyyy/MM/dd HH:mm:ss') : '-'}
-                              </td>
-                              <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                                <div className="flex space-x-2">
-                                  {pack.is_default !== 1 && (
-                                    <button
-                                      onClick={() => handleSetDefaultLanguage(pack.language_code)}
-                                      className="text-blue-600 hover:text-blue-900"
-                                    >
-                                      設為預設
-                                    </button>
-                                  )}
-                                  <button
-                                    onClick={() => handleDownloadLanguagePack(pack.language_code)}
-                                    className="inline-flex items-center px-3 py-1 text-sm font-medium text-green-600 hover:text-green-900 hover:bg-green-50 rounded-md"
-                                    title="下載語言包文件"
-                                  >
-                                    <svg
-                                      xmlns="http://www.w3.org/2000/svg"
-                                      className="h-4 w-4 mr-1"
-                                      fill="none"
-                                      viewBox="0 0 24 24"
-                                      stroke="currentColor"
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                                      />
-                                    </svg>
-                                    下載
-                                  </button>
-                                  <button
-                                    onClick={() => handleEditLanguagePack(pack.language_code)}
-                                    className="text-yellow-600 hover:text-yellow-900"
-                                  >
-                                    編輯
-                                  </button>
-                                  {pack.is_default !== 1 && (
-                                    <button
-                                      onClick={() => handleDeleteLanguagePack(pack.language_code)}
-                                      className="text-red-600 hover:text-red-900"
-                                    >
-                                      刪除
-                                    </button>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
         {/* 檔案管理 */}
         {activeTab === 'file' && (
           <div className="space-y-6">
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
               <h3 className="text-sm font-medium text-blue-900 mb-2">檔案管理說明</h3>
               <p className="text-sm text-blue-700">
-                您可以在此導出完整系統備份（包含系統設定、證券帳戶、銀行帳戶、銀行明細、交易記錄、交割記錄、歷史收益、庫存管理等），或載入備份檔案以還原系統數據。
+                您可以在此導出完整系統備份（包含系統設定、證券帳戶、銀行帳戶、交易記錄、交割記錄、歷史收益、庫存管理等），或載入備份檔案以還原系統數據。
               </p>
             </div>
 
@@ -2242,7 +1499,7 @@ const Settings = () => {
             <div className="border border-gray-200 rounded-lg p-4">
               <h3 className="text-lg font-semibold text-gray-900 mb-2">1. 導出存檔</h3>
               <p className="text-sm text-gray-600 mb-4">
-                導出完整系統備份（包含系統設定、幣別設定、交易記錄、證券帳戶、銀行帳戶、銀行明細、交割記錄、歷史收益、庫存管理等所有數據）
+                導出完整系統備份（包含系統設定、幣別設定、交易記錄、證券帳戶、銀行帳戶、交割記錄、歷史收益、庫存管理等所有數據）
               </p>
               <button
                 onClick={handleExportSettings}
@@ -2257,7 +1514,7 @@ const Settings = () => {
             <div className="border border-gray-200 rounded-lg p-4">
               <h3 className="text-lg font-semibold text-gray-900 mb-2">2. 載入存檔(覆蓋)</h3>
               <p className="text-sm text-gray-600 mb-4">
-                從JSON檔案載入完整備份並還原所有數據（包含系統設定、幣別設定、交易記錄、證券帳戶、銀行帳戶、銀行明細、交割記錄、歷史收益等，此操作會添加數據到現有系統，請謹慎操作）
+                從JSON檔案載入完整備份並還原所有數據（包含系統設定、幣別設定、交易記錄、證券帳戶、銀行帳戶、交割記錄、歷史收益等，此操作會添加數據到現有系統，請謹慎操作）
               </p>
               <div className="space-y-2">
                 <label className="block">

@@ -270,22 +270,6 @@ export const initDatabase = async (): Promise<void> => {
     )
   `);
 
-  // 語言包表
-  await runNoParams(`
-    CREATE TABLE IF NOT EXISTS language_packs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL,
-      language_code TEXT NOT NULL,
-      language_name TEXT NOT NULL,
-      translations TEXT NOT NULL,
-      is_default INTEGER DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-      UNIQUE(user_id, language_code)
-    )
-  `);
-
   // 系統日誌表
   await runNoParams(`
     CREATE TABLE IF NOT EXISTS system_logs (
@@ -295,21 +279,6 @@ export const initDatabase = async (): Promise<void> => {
       message TEXT NOT NULL,
       details TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  // 收益類型表
-  await runNoParams(`
-    CREATE TABLE IF NOT EXISTS income_types (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL,
-      type_name TEXT NOT NULL,
-      is_dividend INTEGER DEFAULT 0,
-      display_order INTEGER DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-      UNIQUE(user_id, type_name)
     )
   `);
 
@@ -426,98 +395,6 @@ export const initDatabase = async (): Promise<void> => {
     }
   }
 
-  // 創建索引以提升查詢性能
-  console.log('正在創建數據庫索引以提升查詢性能...');
-  
-  // transactions 表索引
-  try {
-    await runNoParams(`CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id)`);
-    await runNoParams(`CREATE INDEX IF NOT EXISTS idx_transactions_trade_date ON transactions(trade_date)`);
-    await runNoParams(`CREATE INDEX IF NOT EXISTS idx_transactions_stock_code ON transactions(stock_code)`);
-    await runNoParams(`CREATE INDEX IF NOT EXISTS idx_transactions_securities_account_id ON transactions(securities_account_id)`);
-    await runNoParams(`CREATE INDEX IF NOT EXISTS idx_transactions_user_stock ON transactions(user_id, stock_code)`);
-  } catch (e: any) {
-    console.warn('創建 transactions 索引時發生錯誤:', e.message);
-  }
-
-  // settlements 表索引
-  try {
-    await runNoParams(`CREATE INDEX IF NOT EXISTS idx_settlements_user_id ON settlements(user_id)`);
-    await runNoParams(`CREATE INDEX IF NOT EXISTS idx_settlements_settlement_date ON settlements(settlement_date)`);
-    await runNoParams(`CREATE INDEX IF NOT EXISTS idx_settlements_bank_account_id ON settlements(bank_account_id)`);
-    await runNoParams(`CREATE INDEX IF NOT EXISTS idx_settlements_transaction_id ON settlements(transaction_id)`);
-    await runNoParams(`CREATE INDEX IF NOT EXISTS idx_settlements_user_date ON settlements(user_id, settlement_date)`);
-  } catch (e: any) {
-    console.warn('創建 settlements 索引時發生錯誤:', e.message);
-  }
-
-  // dividends 表索引
-  try {
-    await runNoParams(`CREATE INDEX IF NOT EXISTS idx_dividends_user_id ON dividends(user_id)`);
-    await runNoParams(`CREATE INDEX IF NOT EXISTS idx_dividends_record_date ON dividends(record_date)`);
-    await runNoParams(`CREATE INDEX IF NOT EXISTS idx_dividends_stock_code ON dividends(stock_code)`);
-    await runNoParams(`CREATE INDEX IF NOT EXISTS idx_dividends_user_date ON dividends(user_id, record_date)`);
-  } catch (e: any) {
-    console.warn('創建 dividends 索引時發生錯誤:', e.message);
-  }
-
-  // holdings 表索引
-  try {
-    await runNoParams(`CREATE INDEX IF NOT EXISTS idx_holdings_user_id ON holdings(user_id)`);
-    await runNoParams(`CREATE INDEX IF NOT EXISTS idx_holdings_stock_code ON holdings(stock_code)`);
-    await runNoParams(`CREATE INDEX IF NOT EXISTS idx_holdings_securities_account_id ON holdings(securities_account_id)`);
-  } catch (e: any) {
-    console.warn('創建 holdings 索引時發生錯誤:', e.message);
-  }
-
-  // bank_accounts 表索引
-  try {
-    await runNoParams(`CREATE INDEX IF NOT EXISTS idx_bank_accounts_user_id ON bank_accounts(user_id)`);
-  } catch (e: any) {
-    console.warn('創建 bank_accounts 索引時發生錯誤:', e.message);
-  }
-
-  // bank_transactions 表索引
-  try {
-    await runNoParams(`CREATE INDEX IF NOT EXISTS idx_bank_transactions_user_id ON bank_transactions(user_id)`);
-    await runNoParams(`CREATE INDEX IF NOT EXISTS idx_bank_transactions_transaction_date ON bank_transactions(transaction_date)`);
-    await runNoParams(`CREATE INDEX IF NOT EXISTS idx_bank_transactions_bank_account_id ON bank_transactions(bank_account_id)`);
-    await runNoParams(`CREATE INDEX IF NOT EXISTS idx_bank_transactions_user_date ON bank_transactions(user_id, transaction_date)`);
-  } catch (e: any) {
-    console.warn('創建 bank_transactions 索引時發生錯誤:', e.message);
-  }
-
-  // securities_accounts 表索引
-  try {
-    await runNoParams(`CREATE INDEX IF NOT EXISTS idx_securities_accounts_user_id ON securities_accounts(user_id)`);
-  } catch (e: any) {
-    console.warn('創建 securities_accounts 索引時發生錯誤:', e.message);
-  }
-
-  // system_settings 表索引
-  try {
-    await runNoParams(`CREATE INDEX IF NOT EXISTS idx_system_settings_user_id ON system_settings(user_id)`);
-    await runNoParams(`CREATE INDEX IF NOT EXISTS idx_system_settings_user_key ON system_settings(user_id, setting_key)`);
-  } catch (e: any) {
-    console.warn('創建 system_settings 索引時發生錯誤:', e.message);
-  }
-
-  // language_packs 表索引
-  try {
-    await runNoParams(`CREATE INDEX IF NOT EXISTS idx_language_packs_user_id ON language_packs(user_id)`);
-    await runNoParams(`CREATE INDEX IF NOT EXISTS idx_language_packs_user_code ON language_packs(user_id, language_code)`);
-  } catch (e: any) {
-    console.warn('創建 language_packs 索引時發生錯誤:', e.message);
-  }
-
-  // income_types 表索引
-  try {
-    await runNoParams(`CREATE INDEX IF NOT EXISTS idx_income_types_user_id ON income_types(user_id)`);
-  } catch (e: any) {
-    console.warn('創建 income_types 索引時發生錯誤:', e.message);
-  }
-
-  console.log('數據庫索引創建完成');
   console.log('資料庫表已初始化');
 };
 

@@ -1,26 +1,32 @@
-# 摰??蝙?刻牧??
-## ?蔭?瘙?
-- Node.js 18.0 ?擃???- npm ??yarn
+# 安裝與使用說明
 
-## 摰?甇仿?
+## 前置需求
 
-### 1. 摰????鞈游?隞?
-?典?獢?桅??瑁?嚗?
+- Node.js 18.0 或更高版本
+- npm 或 yarn
+
+## 安裝步驟
+
+### 1. 安裝所有依賴套件
+
+在專案根目錄執行：
+
 ```bash
 npm run install:all
 ```
 
-???芸?摰??寧?erver ??client ????鞈氬?
-### 2. 閮剖??啣?霈
+這會自動安裝根目錄、server 和 client 的所有依賴。
 
-銴ˊ敺垢?憓??貊?靘?隞塚?
+### 2. 設定環境變數
+
+複製後端的環境變數範例文件：
 
 ```bash
 cd server
 copy .env.example .env
 ```
 
-蝺刻摩 `.env` ?辣嚗身摰誑銝??賂?
+編輯 `.env` 文件，設定以下變數：
 
 ```
 PORT=3001
@@ -29,119 +35,114 @@ NODE_ENV=development
 DB_PATH=./database.sqlite
 ```
 
-**??**嚗??啣?銝哨?隢? `JWT_SECRET` ?寧撘瑕?蝣潦?
-### 3. ??蝟餌絞
+**重要**：在生產環境中，請將 `JWT_SECRET` 改為強密碼。
 
-**?寞? 1嚗蝙??start.bat嚗?佗??拍?潛??Ｙ憓?**
+### 3. 啟動開發伺服器
 
-?典?獢?桅????瑁? `start.bat`嚗?雿輻?賭誘??
-
-```bash
-start.bat
-```
-
-??嚗?- ?芸?瑼Ｘ?臬?閬遣蝵?- ??敺垢 API 隡箸??剁?蝡臬 3001嚗?- ???垢?汗???剁?蝡臬 3000嚗?- ?芸????汗?典 http://localhost:3000
-
-**?? ???內嚗?*
-- ??敺????拙??蝒
-- **?蟡刻?撣喟頂蝯?- 隡箸??具?????賡???*嚗?蝡?API嚗?- **?蟡刻?撣喟頂蝯?- 摰Ｘ蝡胯?????賡???*嚗?蝡舀??嚗?- ??隞颱?蝒?賣?撠蝟餌絞?⊥?甇?虜雿輻
-
-**?寞? 2嚗蝙??npm run dev嚗??潭芋撘?**
+在專案根目錄執行：
 
 ```bash
 npm run dev
 ```
 
-??????嚗?- 敺垢 API 隡箸??剁?http://localhost:3001
-- ?垢?隡箸??剁?http://localhost:3000
+這會同時啟動：
+- 後端 API 伺服器：http://localhost:3001
+- 前端開發伺服器：http://localhost:3000
 
-### 4. 閮芸??蝔?
+### 4. 訪問應用程式
 
-**??閮芸?蝬脣?嚗?*
-```
-http://localhost:3000
-```
+打開瀏覽器，訪問：http://localhost:3000
 
-?蝟餌絞?蜓閬??雯???
-**蝟餌絞蝡臬隤芣?嚗?*
-- **?垢?**嚗ttp://localhost:3000嚗?嗡??ｇ?
-- **敺垢 API**嚗ttp://localhost:3001嚗PI ??嚗?蝡航??嚗?
-## ?隤芣?
+## 功能說明
 
-### 撌脣祕雿???
-1. **?冽隤?蝟餌絞**
-   - ?冽閮餃?嚗蝞?+ 撖Ⅳ嚗?-12雿?
-   - ?冽?餃
-   - JWT Token 隤?
+### 已實作功能
 
-2. **霅撣單蝞∠?**嚗撘???踝?
-   - ?啣?霅撣單嚗董?嗅?蝔晞??蝔晞董?嗉?蝣潘?
-   - ?亦?????詨董??   - 蝺刻摩霅撣單
-   - ?芷霅撣單嚗蝣箄??內嚗?
-3. **?箇??嗆?**
-   - 鞈?摨急芋???冽???詨董?嗚漱????銵董?嗚澈摮?
-   - RESTful API ?嗆?
-   - ?垢頝舐??撅
+1. **用戶認證系統**
+   - 用戶註冊（郵箱 + 密碼，8-12位）
+   - 用戶登入
+   - JWT Token 認證
 
-### 敺祕雿???
-?寞??函??瘙?隞塚?隞乩??撠撖虫?嚗?鞈?摨怎?瑽歇皞?憟踝?
+2. **證券帳戶管理**（您引用的功能）
+   - 新增證券帳戶（帳戶名稱、券商名稱、帳戶號碼）
+   - 查看所有證券帳戶
+   - 編輯證券帳戶
+   - 刪除證券帳戶（含確認提示）
 
-- 鈭斗?閮?蝞∠?
-- 鈭文蝞∠?
-- ?銵董?嗥恣??- 摨怠?蝞∠?
-- ??蝯???
-- ?”??
-- 甇瑕?嗥?閮?
-- 蝟餌絞閮剖?嚗PI閮剖??馳?亥身摰?嚗?- 敺蝞∠?
+3. **基礎架構**
+   - 資料庫模型（用戶、證券帳戶、交易記錄、銀行帳戶、庫存）
+   - RESTful API 架構
+   - 前端路由和佈局
 
-## 鞈?摨怎?瑽?
-蝟餌絞雿輻 SQLite 鞈?摨恬?鞈?摨急?隞嗆??芸??萄遣??`server/database.sqlite`??
-銝餉?鞈?銵剁?
-- `users` - ?冽鞈?
-- `securities_accounts` - 霅撣單
-- `transactions` - 鈭斗?閮?
-- `bank_accounts` - ?銵董??- `holdings` - 摨怠?
+### 待實作功能
 
-## API 蝡舫?
+根據您的需求文件，以下功能尚未實作，但資料庫結構已準備好：
 
-### 隤?
-- `POST /api/auth/register` - 閮餃?
-- `POST /api/auth/login` - ?餃
+- 交易記錄管理
+- 交割管理
+- 銀行帳戶管理
+- 庫存管理
+- 投資組合分析
+- 圖表分析
+- 歷史收益記錄
+- 系統設定（API設定、幣別設定等）
+- 後台管理
 
-### 霅撣單
-- `GET /api/securities-accounts` - ?脣???董??- `GET /api/securities-accounts/:id` - ?脣??桀董??- `POST /api/securities-accounts` - ?啣?撣單
-- `PUT /api/securities-accounts/:id` - ?湔撣單
-- `DELETE /api/securities-accounts/:id` - ?芷撣單
+## 資料庫結構
 
-????詨董?嗥??API ?賡?閬?霅?Bearer Token嚗?
-## ?隤芣?
+系統使用 SQLite 資料庫，資料庫文件會自動創建在 `server/database.sqlite`。
 
-### ????蝡?```bash
+主要資料表：
+- `users` - 用戶資料
+- `securities_accounts` - 證券帳戶
+- `transactions` - 交易記錄
+- `bank_accounts` - 銀行帳戶
+- `holdings` - 庫存
+
+## API 端點
+
+### 認證
+- `POST /api/auth/register` - 註冊
+- `POST /api/auth/login` - 登入
+
+### 證券帳戶
+- `GET /api/securities-accounts` - 獲取所有帳戶
+- `GET /api/securities-accounts/:id` - 獲取單個帳戶
+- `POST /api/securities-accounts` - 新增帳戶
+- `PUT /api/securities-accounts/:id` - 更新帳戶
+- `DELETE /api/securities-accounts/:id` - 刪除帳戶
+
+所有證券帳戶相關 API 都需要認證（Bearer Token）。
+
+## 開發說明
+
+### 僅啟動後端
+```bash
 npm run dev:server
 ```
 
-### ????蝡?```bash
+### 僅啟動前端
+```bash
 npm run dev:client
 ```
 
-### 撱箇蔭??
+### 建置生產版本
 ```bash
 npm run build
 ```
 
-## ?銵ㄖ
+## 技術棧
 
-- **?垢**: React 18 + TypeScript + Vite + Tailwind CSS
-- **敺垢**: Node.js + Express + TypeScript
-- **鞈?摨?*: SQLite
-- **隤?**: JWT (jsonwebtoken)
-- **撖Ⅳ??**: bcryptjs
+- **前端**: React 18 + TypeScript + Vite + Tailwind CSS
+- **後端**: Node.js + Express + TypeScript
+- **資料庫**: SQLite
+- **認證**: JWT (jsonwebtoken)
+- **密碼加密**: bcryptjs
 
-## 瘜冽?鈭?
+## 注意事項
 
-1. ??啣?雿輻 SQLite嚗??Ｙ憓遣霅唬蝙??PostgreSQL ??MySQL
-2. JWT Secret ?函??Ｙ憓葉敹??湔
-3. 撖Ⅳ?瑕漲???8-12 雿??寞??瘙?隞塚?
-4. ???API 隢?嚗?餃/閮餃?憭??賡?閬 Header 銝剖葆銝?`Authorization: Bearer <token>`
+1. 開發環境使用 SQLite，生產環境建議使用 PostgreSQL 或 MySQL
+2. JWT Secret 在生產環境中必須更改
+3. 密碼長度限制為 8-12 位（根據需求文件）
+4. 所有 API 請求（除登入/註冊外）都需要在 Header 中帶上 `Authorization: Bearer <token>`
 
 

@@ -1,22 +1,15 @@
 {
   "name": "stock-accounting-system",
-  "version": "1.0.0",
+  "version": "vS0005",
   "description": "多帳戶股票記帳系統",
   "main": "index.js",
   "scripts": {
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "cd server && npm run dev",
     "dev:client": "cd client && npm run dev",
-    "start": "concurrently -n \"SERVER,CLIENT\" -c \"cyan,yellow\" \"npm run start:server\" \"npm run start:client\"",
-    "start:server": "cd server && npm start",
-    "start:client": "cd client && npm run preview",
     "build": "cd client && npm run build",
     "install:all": "npm install && cd server && npm install && cd ../client && npm install",
-    "postinstall": "cd server && npm install && cd ../client && npm install",
-    "start:node-window": "node start-node.js",
-    "stop:node": "node stop-node.js",
-    "setup": "node setup.js",
-    "protect:bat": "node protect-bat-files.js"
+    "start:client": "cd client && npm run preview -- --port 3000"
   },
   "keywords": ["stock", "accounting", "trading"],
   "author": "",

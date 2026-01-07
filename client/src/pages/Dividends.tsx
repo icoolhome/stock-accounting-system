@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useLanguage } from '../contexts/LanguageContext';
 import axios from 'axios';
 import { format } from 'date-fns';
 
@@ -18,8 +17,9 @@ interface Dividend {
   description?: string;
 }
 
+const INCOME_TYPES = ['全部', '股息', 'ETF股息', '資本利得', '除權除息', '其他收益'];
+
 const Dividends = () => {
-  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'history' | 'twse'>('history');
   const [dividends, setDividends] = useState<Dividend[]>([]);
   const [loading, setLoading] = useState(true);
@@ -27,57 +27,6 @@ const Dividends = () => {
   const [editingDividend, setEditingDividend] = useState<Dividend | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
   const [error, setError] = useState('');
-  // 收益類型選項列表（可自由添加，使用 localStorage 存儲）
-  const [incomeTypes, setIncomeTypes] = useState<string[]>(() => {
-    const saved = localStorage.getItem('dividend_income_types');
-    return saved ? JSON.parse(saved) : ['股息', 'ETF股息', '資本利得', '除權', '除息', '除權除息', '其他收益'];
-  });
-
-  const [newIncomeTypeInput, setNewIncomeTypeInput] = useState('');
-  const [showIncomeTypeDropdown, setShowIncomeTypeDropdown] = useState(false);
-
-  // 保存選項列表到 localStorage
-  const saveIncomeTypes = (types: string[]) => {
-    setIncomeTypes(types);
-    localStorage.setItem('dividend_income_types', JSON.stringify(types));
-  };
-
-  // 添加新選項
-  const handleAddIncomeType = () => {
-    if (newIncomeTypeInput.trim() && !incomeTypes.includes(newIncomeTypeInput.trim())) {
-      const updated = [...incomeTypes, newIncomeTypeInput.trim()];
-      saveIncomeTypes(updated);
-      setNewIncomeTypeInput('');
-    }
-  };
-
-  // 刪除選項
-  const handleDeleteIncomeType = (typeToDelete: string) => {
-    // 如果當前表單選中要刪除的選項，先清空選擇
-    if (formData.income_type === typeToDelete) {
-      setFormData(prev => ({ ...prev, income_type: incomeTypes.length > 1 ? incomeTypes.filter(t => t !== typeToDelete)[0] : '' }));
-    }
-    const updated = incomeTypes.filter(t => t !== typeToDelete);
-    saveIncomeTypes(updated);
-  };
-
-  // 點擊外部關閉選項下拉選單
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      if (showIncomeTypeDropdown && !target.closest('.income-type-dropdown-container')) {
-        setShowIncomeTypeDropdown(false);
-      }
-    };
-
-    if (showIncomeTypeDropdown) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => {
-        document.removeEventListener('mousedown', handleClickOutside);
-      };
-    }
-  }, [showIncomeTypeDropdown]);
-
   const [stats, setStats] = useState({
     totalAfterTax: 0,
     totalProfitLoss: 0,
@@ -88,13 +37,13 @@ const Dividends = () => {
   const [filters, setFilters] = useState({
     startDate: '',
     endDate: '',
-    incomeType: t('dividends.all', '全部'),
+    incomeType: '全部',
     stockCode: '',
   });
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [dragging, setDragging] = useState(false);
-  const [modalPosition, setModalPosition] = useState<{ x: number | null; y: number | null }>({ x: null, y: null });
+  const [modalPosition, setModalPosition] = useState({ x: 0, y: 0 });
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [selectedDividendId, setSelectedDividendId] = useState<number | null>(null);
   const [twseLoading, setTwseLoading] = useState(false);
@@ -104,7 +53,7 @@ const Dividends = () => {
 
   const [formData, setFormData] = useState({
     record_date: format(new Date(), 'yyyy-MM-dd'),
-    income_type: '',
+    income_type: '全部',
     stock_code: '',
     stock_name: '',
     pre_tax_amount: '' as number | '',
@@ -118,10 +67,6 @@ const Dividends = () => {
 
   useEffect(() => {
     fetchDividends();
-    // 設置默認收益類型為第一個（如果表單中的類型為空）
-    if (incomeTypes.length > 0 && !formData.income_type) {
-      setFormData(prev => ({ ...prev, income_type: incomeTypes[0] }));
-    }
   }, [filters, currentPage, pageSize]);
 
   // 根據股票代碼自動帶出股票名稱（簡易查詢）
@@ -214,8 +159,6 @@ const Dividends = () => {
       source: dividend.source || '',
       description: dividend.description || '',
     });
-    // 重置模態框位置到中間
-    setModalPosition({ x: null, y: null });
     setShowModal(true);
   };
 
@@ -230,10 +173,9 @@ const Dividends = () => {
   };
 
   const resetForm = () => {
-    const defaultType = incomeTypes.length > 0 ? incomeTypes[0] : '';
     setFormData({
       record_date: format(new Date(), 'yyyy-MM-dd'),
-      income_type: defaultType,
+      income_type: '全部',
       stock_code: '',
       stock_name: '',
       pre_tax_amount: 0,
@@ -250,34 +192,18 @@ const Dividends = () => {
     if ((e.target as HTMLElement).closest('input, select, textarea, button')) {
       return;
     }
-    const modalElement = e.currentTarget as HTMLElement;
-    const rect = modalElement.getBoundingClientRect();
-    
-    // 如果當前是居中狀態，先計算實際位置
-    let currentX = modalPosition.x;
-    let currentY = modalPosition.y;
-    
-    if (currentX === null || currentY === null) {
-      // 居中狀態，計算實際像素位置
-      currentX = rect.left;
-      currentY = rect.top;
-      setModalPosition({ x: currentX, y: currentY });
-    }
-    
     setDragging(true);
     setDragStart({
-      x: e.clientX - currentX,
-      y: e.clientY - currentY,
+      x: e.clientX - modalPosition.x,
+      y: e.clientY - modalPosition.y,
     });
   };
 
   const handleModalMouseMove = (e: React.MouseEvent) => {
     if (dragging) {
-      const newX = e.clientX - dragStart.x;
-      const newY = e.clientY - dragStart.y;
       setModalPosition({
-        x: newX,
-        y: newY,
+        x: e.clientX - dragStart.x,
+        y: e.clientY - dragStart.y,
       });
     }
   };
@@ -293,7 +219,7 @@ const Dividends = () => {
   );
 
   if (loading && dividends.length === 0) {
-    return <div className="text-center py-8">{t('common.loading', '載入中...')}</div>;
+    return <div className="text-center py-8">載入中...</div>;
   }
 
   const handleExportDividendsExcel = () => {
@@ -307,7 +233,7 @@ const Dividends = () => {
     setTwseRecords([]);
 
     if (!filters.startDate || !filters.endDate) {
-      setTwseError(t('dividends.selectStartEndDate', '請先選擇開始日期與結束日期'));
+      setTwseError('請先選擇開始日期與結束日期');
       return;
     }
 
@@ -321,14 +247,14 @@ const Dividends = () => {
       });
 
       if (!response.data.success) {
-        setTwseError(response.data.message || t('dividends.queryFailed', '查詢失敗'));
+        setTwseError(response.data.message || '查詢失敗');
         return;
       }
 
       setTwseFields(response.data.fields || []);
       setTwseRecords(response.data.records || []);
     } catch (err: any) {
-      setTwseError(err.response?.data?.message || t('dividends.queryTwseFailed', '查詢 TWSE 除權除息資料失敗'));
+      setTwseError(err.response?.data?.message || '查詢 TWSE 除權除息資料失敗');
     } finally {
       setTwseLoading(false);
     }
@@ -338,7 +264,7 @@ const Dividends = () => {
     <div className="px-4 py-6 sm:px-0">
       <div className="bg-white shadow rounded-lg p-6">
         <div className="flex justify-between items-center mb-4">
-          <h1 className="text-2xl font-bold text-gray-900">{t('dividends.title', '歷史收益')}</h1>
+          <h1 className="text-2xl font-bold text-gray-900">歷史收益</h1>
         </div>
 
         {/* 標籤頁導航：歷史收益 / TWSE 除權除息查詢 */}
@@ -352,7 +278,7 @@ const Dividends = () => {
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              {t('dividends.historyRecords', '歷史收益記錄')}
+              歷史收益記錄
             </button>
             <button
               onClick={() => setActiveTab('twse')}
@@ -362,7 +288,7 @@ const Dividends = () => {
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              {t('dividends.twseExrightsQuery', 'TWSE 除權除息查詢')}
+              TWSE 除權除息查詢
             </button>
           </nav>
         </div>
@@ -375,7 +301,7 @@ const Dividends = () => {
                 type="button"
                 onClick={handleExportDividendsExcel}
                 className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2"
-                title={t('dividends.exportDividendsExcel', '匯出歷史收益 Excel')}
+                title="匯出歷史收益 Excel"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -396,13 +322,11 @@ const Dividends = () => {
               <button
                 onClick={() => {
                   resetForm();
-                  // 重置模態框位置到中間
-                  setModalPosition({ x: null, y: null });
                   setShowModal(true);
                 }}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium"
               >
-                {t('dividends.addDividendRecord', '新增收益記錄')}
+                新增收益記錄
               </button>
             </div>
 
@@ -461,8 +385,7 @@ const Dividends = () => {
                   onChange={(e) => setFilters({ ...filters, incomeType: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
                 >
-                  <option value="全部">全部</option>
-                  {incomeTypes.map((type) => (
+                  {INCOME_TYPES.map((type) => (
                     <option key={type} value={type}>
                       {type}
                     </option>
@@ -500,13 +423,7 @@ const Dividends = () => {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">收益類型</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">股票代號</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">股票名稱</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">每股股息</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">持股數量</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">稅前金額</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">稅額</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">稅後金額</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">來源</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">描述</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">操作</th>
                   </tr>
                 </thead>
@@ -534,25 +451,7 @@ const Dividends = () => {
                         {dividend.stock_name}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {dividend.dividend_per_share ? `$${dividend.dividend_per_share.toFixed(2)}` : '-'}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {dividend.share_count ? dividend.share_count.toLocaleString() : '-'}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                        ${dividend.pre_tax_amount.toFixed(2)}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                        ${dividend.tax_amount.toFixed(2)}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                         ${dividend.after_tax_amount.toFixed(2)}
-                      </td>
-                      <td className="px-4 py-4 text-sm text-gray-900">
-                        {dividend.source || '-'}
-                      </td>
-                      <td className="px-4 py-4 text-sm text-gray-900">
-                        {dividend.description || '-'}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
                         <button
@@ -735,17 +634,14 @@ const Dividends = () => {
             <div
               className="relative mx-auto p-5 border w-full max-w-4xl shadow-lg rounded-md bg-white"
               style={{
-                position: 'fixed',
-                top: modalPosition.y === null ? '50%' : `${modalPosition.y}px`,
-                left: modalPosition.x === null ? '50%' : `${modalPosition.x}px`,
-                transform: modalPosition.y === null ? 'translate(-50%, -50%)' : 'none',
-                maxHeight: '90vh',
-                overflowY: 'auto',
+                marginTop: `${Math.max(20, modalPosition.y)}px`,
+                marginLeft: `${modalPosition.x}px`,
+                transform: 'translateX(-50%)',
               }}
               onMouseDown={handleModalMouseDown}
             >
               <h3 className="text-lg font-bold text-gray-900 mb-4 cursor-move">
-                {editingDividend ? t('dividends.editDividendRecord', '編輯收益記錄') : t('dividends.addDividendRecord', '新增收益記錄')}
+                {editingDividend ? '編輯收益記錄' : '新增收益記錄'}
               </h3>
               <form onSubmit={handleSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto">
                 <div className="grid grid-cols-2 gap-4">
@@ -761,89 +657,17 @@ const Dividends = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">收益類型 *</label>
-                    <div className="relative income-type-dropdown-container">
-                      <div className="flex gap-2">
-                        <div className="flex-1 relative">
-                          <button
-                            type="button"
-                            onClick={() => setShowIncomeTypeDropdown(!showIncomeTypeDropdown)}
-                            className="w-full px-3 py-2 text-left border border-gray-300 rounded-md bg-white flex items-center justify-between"
-                          >
-                            <span className={formData.income_type ? 'text-gray-900' : 'text-gray-500'}>
-                              {formData.income_type || '請選擇'}
-                            </span>
-                            <svg className={`w-5 h-5 text-gray-400 transition-transform ${showIncomeTypeDropdown ? 'transform rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                            </svg>
-                          </button>
-                          {showIncomeTypeDropdown && (
-                            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
-                              <div className="p-2 border-b border-gray-200 sticky top-0 bg-white">
-                                <div className="flex gap-1">
-                                  <input
-                                    type="text"
-                                    value={newIncomeTypeInput}
-                                    onChange={(e) => setNewIncomeTypeInput(e.target.value)}
-                                    onKeyPress={(e) => {
-                                      if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        handleAddIncomeType();
-                                      }
-                                    }}
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
-                                    placeholder="新增收益類型"
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleAddIncomeType();
-                                    }}
-                                    className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm"
-                                    title="添加新選項"
-                                  >
-                                    +
-                                  </button>
-                                </div>
-                              </div>
-                              <div className="py-1">
-                                {incomeTypes.length === 0 ? (
-                                  <div className="px-3 py-2 text-sm text-gray-500 text-center">暫無選項</div>
-                                ) : (
-                                  incomeTypes.map((type) => (
-                                    <div
-                                      key={type}
-                                      className="flex items-center justify-between px-3 py-2 hover:bg-gray-100 cursor-pointer group"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setFormData({ ...formData, income_type: type });
-                                        setShowIncomeTypeDropdown(false);
-                                      }}
-                                    >
-                                      <span className={formData.income_type === type ? 'text-blue-600 font-medium' : 'text-gray-900'}>
-                                        {type}
-                                      </span>
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleDeleteIncomeType(type);
-                                        }}
-                                        className="text-red-600 hover:text-red-800 hover:bg-red-100 rounded px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                        title="刪除此選項"
-                                      >
-                                        ×
-                                      </button>
-                                    </div>
-                                  ))
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
+                    <select
+                      value={formData.income_type}
+                      onChange={(e) => setFormData({ ...formData, income_type: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    >
+                      {INCOME_TYPES.filter(t => t !== '全部').map((type) => (
+                        <option key={type} value={type}>
+                          {type}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">股票代碼 *</label>

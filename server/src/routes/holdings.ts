@@ -301,13 +301,38 @@ router.get('/', async (req: AuthRequest, res) => {
     const DEFAULT_TAX_RATE = (feeSettings.taxRate || 0.3) / 100; // 一般股票證交稅率（只有賣出時扣，轉換為小數，台股標準為0.3%）
     const ETF_TAX_RATE = (feeSettings.etfTaxRate || 0.1) / 100; // 股票型ETF證交稅率（只有賣出時扣，轉換為小數，台股標準為0.1%）
     
+    // 判斷是否為 ETF 的輔助函數
+    // 台股 ETF 代碼特徵：
+    // 1. 0050~0057（元大系列老牌 ETF）
+    // 2. 006XXX（6位數字開頭的 ETF）
+    // 3. 00XXXL/R/U（槓桿/反向/期貨 ETF）
+    // 4. 00XXXB（債券 ETF）
+    // 5. 00XXXA（主動式 ETF）
+    // 6. 00XXX（5位數字，大多數 ETF）
+    const isEtfByCode = (stockCode: string): boolean => {
+      if (!stockCode) return false;
+      // 0050~0057
+      if (/^005[0-7]$/.test(stockCode)) return true;
+      // 006XXX（6位數字開頭）
+      if (/^006\d{3}$/.test(stockCode)) return true;
+      // 00XXX 後面接 L/R/U/B/A（槓桿/反向/期貨/債券/主動式）
+      if (/^00\d{3}[LRUBA]$/.test(stockCode)) return true;
+      // 00XXX（純5位數字，大多數 ETF）
+      if (/^00\d{3}$/.test(stockCode)) return true;
+      return false;
+    };
+
     // 根據股票類型獲取證交稅率的函數
     // 2026年台股交易稅率規定：
     // - 一般股票：3‰（0.3%）
     // - 股票型ETF（含主動式ETF和被動式ETF）：1‰（0.1%）
     // - 權證：1‰（0.1%）
     // - 現股當沖：1.5‰（0.15%）
-    const getTaxRate = (etfType: string | null, stockName: string = '') => {
+    const getTaxRate = (etfType: string | null, stockName: string = '', stockCode: string = '') => {
+      // 優先用股票代碼判定是否為 ETF
+      if (isEtfByCode(stockCode)) {
+        return ETF_TAX_RATE;
+      }
       if (etfType) {
         // 所有ETF（含主動式ETF和被動式ETF）使用設定中的ETF稅率（預設0.1%）
         return ETF_TAX_RATE;
@@ -318,7 +343,11 @@ router.get('/', async (req: AuthRequest, res) => {
     };
     
     // 根據股票類型獲取手續費率的函數
-    const getFeeRate = (etfType: string | null) => {
+    const getFeeRate = (etfType: string | null, stockCode: string = '') => {
+      // 優先用股票代碼判定是否為 ETF
+      if (isEtfByCode(stockCode)) {
+        return ETF_FEE_RATE;
+      }
       if (etfType) {
         // ETF 使用設定中的ETF手續費率
         return ETF_FEE_RATE;
@@ -635,15 +664,30 @@ router.get('/', async (req: AuthRequest, res) => {
               market_value = (h.current_price || cost_price) * quantity;
               // 盈虧計算：點精靈的計算方式
               // 根據點精靈的計算邏輯：
-              // 賣出費用 = 賣出手續費（原價，不打折）+ 賣出交易稅
-              // 點精靈使用原價手續費進行預估，不扣除折扣
-              const stockTaxRate = getTaxRate(h.etf_type, h.stock_name); // 賣出交易稅率（根據股票類型：一般股票0.3%，ETF 0.1%）
-              const stockFeeRate = getFeeRate(h.etf_type); // 賣出手續費率（原價，根據股票類型：一般股票0.1425%，ETF 0.1425%）
-              // 點精靈計算：賣出手續費（原價）+ 賣出交易稅
-              const estimatedSellFee = floorTo2Decimals(market_value * stockFeeRate); // 賣出手續費（原價，不打折）
-              const estimatedSellTax = floorTo2Decimals(market_value * stockTaxRate); // 賣出交易稅
-              const totalSellCost = estimatedSellFee + estimatedSellTax; // 總賣出成本
-              profit_loss = Math.round(market_value - holding_cost - totalSellCost); // 四捨五入到整數
+              // 賣出費用 = 賣出手續費 + 賣出交易稅
+              let stockTaxRate = getTaxRate(h.etf_type, h.stock_name, h.stock_code); // 賣出交易稅率（根據股票類型：一般股票0.3%，ETF 0.1%）
+              let stockFeeRate = getFeeRate(h.etf_type, h.stock_code); // 賣出手續費率（原價，根據股票類型：一般股票0.1425%，ETF 0.1425%）
+              
+              // 點精靈計算：賣出手續費 + 賣出交易稅
+              // 點精靈實測對齊（以 0050/00992A 為例）：
+              // - 市值/成本最終以「整數」呈現（市值：先到小數2位再四捨五入；成本：四捨五入）
+              // - 預估賣出手續費、交易稅：以「整數」無條件捨去（floor）
+              const roundedMarketValue = Math.round(floorTo2Decimals(market_value));
+              const roundedHoldingCost = Math.round(holding_cost);
+              const estimatedSellFeeInt = Math.floor(roundedMarketValue * stockFeeRate); // 賣出手續費（整數捨去）
+              const estimatedSellTaxInt = Math.floor(roundedMarketValue * stockTaxRate); // 賣出交易稅（整數捨去）
+              const totalSellCostInt = estimatedSellFeeInt + estimatedSellTaxInt; // 總賣出成本（整數）
+              profit_loss = roundedMarketValue - roundedHoldingCost - totalSellCostInt;
+              
+              // 調試信息：所有國內現股
+              console.log(
+                `[國內現股計算結果] ${h.stock_code} ${h.stock_name} ` +
+                  `市值(raw)=${market_value}, 市值(整數)=${roundedMarketValue}, ` +
+                  `持有成本(raw)=${holding_cost}, 持有成本(整數)=${roundedHoldingCost}, ` +
+                  `手續費率=${stockFeeRate}, 交易稅率=${stockTaxRate}, ` +
+                  `手續費(整數捨去)=${estimatedSellFeeInt}, 交易稅(整數捨去)=${estimatedSellTaxInt}, ` +
+                  `賣出費用(整數)=${totalSellCostInt}, 盈虧=${profit_loss}`
+              );
             }
           } else {
             // 國外現股
@@ -798,13 +842,13 @@ router.get('/details', async (req: AuthRequest, res) => {
   try {
     const { securitiesAccountId, stockCode } = req.query;
 
-    // 只獲取國內（TWD）的買入交易記錄（未完全賣出的）
-    let query = `SELECT t.*, sa.account_name, sa.broker_name
+    // 獲取所有交易記錄（包含買入和賣出，用於計算剩餘數量）
+    let query = `SELECT t.*, sa.account_name, sa.broker_name, sd.market_type, sd.etf_type
                  FROM transactions t 
                  LEFT JOIN securities_accounts sa ON t.securities_account_id = sa.id 
+                 LEFT JOIN stock_data sd ON t.stock_code = sd.stock_code
                  WHERE t.user_id = ? 
-                 AND (t.currency = 'TWD' OR t.currency IS NULL)
-                 AND (t.transaction_type LIKE '%買進%' OR t.transaction_type LIKE '%買入%')`;
+                 AND (t.currency = 'TWD' OR t.currency IS NULL)`;
     const params: any[] = [req.userId];
 
     if (securitiesAccountId) {
@@ -816,81 +860,250 @@ router.get('/details', async (req: AuthRequest, res) => {
       params.push(`%${stockCode}%`);
     }
 
-    query += ' ORDER BY t.trade_date DESC, t.created_at DESC';
+    query += ' ORDER BY t.trade_date ASC, t.created_at ASC';
 
-    const transactions = await all<any>(query, params);
+    const allTransactions = await all<any>(query, params);
 
-    // 預設費率
-    const FEE_RATE = 0.001425;
+    // 讀取手續費設定
+    let feeSettings = {
+      baseFeeRate: 0.1425,
+      etfFeeRate: 0.1425,
+      taxRate: 0.3,
+      etfTaxRate: 0.1,
+      buyFeeDiscount: 0.6,
+      sellFeeDiscount: 0.6,
+    };
+
+    try {
+      const settings = await all<any>(
+        'SELECT setting_value FROM user_settings WHERE user_id = ? AND setting_key = ?',
+        [req.userId, 'feeSettings']
+      );
+      
+      if (settings.length > 0 && settings[0].setting_value) {
+        const parsedSettings = JSON.parse(settings[0].setting_value);
+        feeSettings = { ...feeSettings, ...parsedSettings };
+        if (parsedSettings.feeDiscount !== undefined && !parsedSettings.buyFeeDiscount && !parsedSettings.sellFeeDiscount) {
+          feeSettings.buyFeeDiscount = parsedSettings.feeDiscount;
+          feeSettings.sellFeeDiscount = parsedSettings.feeDiscount;
+        }
+        if (!parsedSettings.etfTaxRate) {
+          feeSettings.etfTaxRate = 0.1;
+        }
+        if (!parsedSettings.etfFeeRate) {
+          feeSettings.etfFeeRate = parsedSettings.baseFeeRate || 0.1425;
+        }
+      }
+    } catch (err) {
+      console.error('讀取手續費設定失敗，使用預設值:', err);
+    }
+
+    const FEE_RATE = (feeSettings.baseFeeRate || 0.1425) / 100;
+    const ETF_FEE_RATE = (feeSettings.etfFeeRate || 0.1425) / 100;
+    const BUY_FEE_RATE_DISCOUNT = FEE_RATE * (feeSettings.buyFeeDiscount || 0.6);
+    const ETF_BUY_FEE_RATE_DISCOUNT = ETF_FEE_RATE * (feeSettings.buyFeeDiscount || 0.6);
     const FINANCING_RATE = 0.6;
     const MARGIN_RATE = 0.9;
     const FINANCING_INTEREST_RATE = 0.06;
-    const BORROWING_FEE_RATE = 0.001;
 
-    // 計算每筆交易記錄的明細信息
-    const details = transactions.map((t: any) => {
-      const priceQty = t.price * t.quantity;
-      const isFinancing = t.transaction_type.includes('融資');
-      const isShortSell = t.transaction_type.includes('融券');
+    // 判斷是否為 ETF 的輔助函數
+    const isEtfByCode = (code: string): boolean => {
+      if (!code) return false;
+      if (/^005[0-7]$/.test(code)) return true;
+      if (/^006\d{3}$/.test(code)) return true;
+      if (/^00\d{3}[LRUBA]$/.test(code)) return true;
+      if (/^00\d{3}$/.test(code)) return true;
+      return false;
+    };
 
-      let transactionType = '現股';
-      if (isFinancing) transactionType = '融資';
-      else if (isShortSell) transactionType = '融券';
-
-      // 計算持有成本
-      let holdingCost = 0;
-      if (transactionType === '現股') {
-        const fee = t.fee || floorTo2Decimals(priceQty * FEE_RATE);
-        holdingCost = floorTo2Decimals(priceQty + fee);
-      } else if (transactionType === '融資') {
-        const financingAmount = calculateFinancingAmount(t.price, t.quantity, FINANCING_RATE);
-        const margin = priceQty - financingAmount;
-        const fee = t.fee || floorTo2Decimals(priceQty * FEE_RATE);
-        holdingCost = floorTo2Decimals(margin + fee);
-      } else if (transactionType === '融券') {
-        const margin = calculateMargin(t.price, t.quantity, MARGIN_RATE);
-        holdingCost = floorTo2Decimals(margin);
+    // 根據股票類型獲取折扣後手續費率的函數
+    const getDiscountFeeRate = (etfType: string | null, stockCode: string = '', isBuy: boolean) => {
+      if (isEtfByCode(stockCode) || etfType) {
+        return ETF_BUY_FEE_RATE_DISCOUNT;
       }
+      return BUY_FEE_RATE_DISCOUNT;
+    };
 
-      // 計算預估息（僅融資）
-      let estimatedInterest = 0;
-      if (transactionType === '融資' && t.settlement_date) {
-        const today = new Date().toISOString().split('T')[0];
-        const days = daysBetween(t.settlement_date, today);
-        if (days > 0) {
-          const financingAmount = calculateFinancingAmount(t.price, t.quantity, FINANCING_RATE);
-          estimatedInterest = calculateInterest(financingAmount, FINANCING_INTEREST_RATE, days);
-        }
+    // 使用 Map 追蹤每筆買入交易的剩餘數量（key: transaction_id, value: remainingQuantity）
+    const buyTransactionRemaining = new Map<number, number>();
+    const buyTransactionDetails = new Map<number, any>();
+
+    // 第一次遍歷：記錄所有買入交易，並初始化剩餘數量
+    allTransactions.forEach((t: any) => {
+      const isBuy = t.transaction_type.includes('買進') || t.transaction_type.includes('買入');
+      if (isBuy) {
+        buyTransactionRemaining.set(t.id, t.quantity);
+        buyTransactionDetails.set(t.id, t);
       }
-
-      // 計算融資金額/券擔保品
-      let financingAmountOrCollateral = null;
-      if (transactionType === '融資') {
-        financingAmountOrCollateral = calculateFinancingAmount(t.price, t.quantity, FINANCING_RATE);
-      } else if (transactionType === '融券') {
-        const fee = t.fee || 0;
-        const tax = (t.tax || 0) + (t.securities_tax || 0);
-        const borrowingFee = t.borrowing_fee || floorTo2Decimals(priceQty * BORROWING_FEE_RATE);
-        const totalFee = floorTo2Decimals(fee + tax + borrowingFee);
-        financingAmountOrCollateral = floorTo2Decimals(priceQty - totalFee); // 券擔保品
-      }
-
-      return {
-        id: t.id,
-        account_name: t.account_name || '-',
-        transaction_type: transactionType,
-        stock_code: t.stock_code,
-        stock_name: t.stock_name,
-        trade_date: t.trade_date,
-        quantity: t.quantity,
-        price: t.price,
-        holding_cost: holdingCost,
-        estimated_interest: estimatedInterest,
-        financing_amount_or_collateral: financingAmountOrCollateral,
-        currency: t.currency || 'TWD',
-        buy_reason: t.buy_reason || '',
-      };
     });
+
+    // 第二次遍歷：使用 FIFO 邏輯扣除已賣出的數量
+    // 按照交易日期和時間順序處理，先買的先賣（FIFO）
+    const today = new Date().toISOString().split('T')[0];
+    
+    // 按股票代碼、帳戶、交易類型分組處理
+    const stockGroupMap = new Map<string, Array<{ id: number; quantity: number; trade_date: string; created_at: string }>>();
+
+    allTransactions.forEach((t: any) => {
+      const isBuy = t.transaction_type.includes('買進') || t.transaction_type.includes('買入');
+      const isSell = t.transaction_type.includes('賣出') || t.transaction_type.includes('賣');
+      
+      if (isBuy || isSell) {
+        let transactionType = '現股';
+        if (t.transaction_type.includes('融資')) transactionType = '融資';
+        else if (t.transaction_type.includes('融券')) transactionType = '融券';
+        
+        const groupKey = `${t.securities_account_id || 'null'}_${t.stock_code}_${transactionType}`;
+        
+        if (!stockGroupMap.has(groupKey)) {
+          stockGroupMap.set(groupKey, []);
+        }
+        
+        stockGroupMap.get(groupKey)!.push({
+          id: t.id,
+          quantity: isSell ? -t.quantity : t.quantity, // 賣出用負數
+          trade_date: t.trade_date || today,
+          created_at: t.created_at || t.trade_date || today,
+        });
+      }
+    });
+
+    // 對每個分組執行 FIFO 扣除
+    stockGroupMap.forEach((transactions, groupKey) => {
+      // 按交易日期和時間排序
+      transactions.sort((a, b) => {
+        if (a.trade_date !== b.trade_date) {
+          return a.trade_date.localeCompare(b.trade_date);
+        }
+        return a.created_at.localeCompare(b.created_at);
+      });
+
+      // 使用佇列處理 FIFO
+      const buyQueue: Array<{ id: number; quantity: number }> = [];
+
+      transactions.forEach((txn) => {
+        if (txn.quantity > 0) {
+          // 買入：加入佇列
+          buyQueue.push({ id: txn.id, quantity: txn.quantity });
+        } else {
+          // 賣出：從佇列中扣除（FIFO）
+          let remainingSellQty = Math.abs(txn.quantity);
+          
+          while (remainingSellQty > 0 && buyQueue.length > 0) {
+            const buy = buyQueue[0];
+            const currentRemaining = buyTransactionRemaining.get(buy.id) || 0;
+            
+            if (currentRemaining <= remainingSellQty) {
+              // 整個買入都被賣出
+              buyTransactionRemaining.set(buy.id, 0);
+              remainingSellQty -= currentRemaining;
+              buyQueue.shift();
+            } else {
+              // 部分買入被賣出
+              buyTransactionRemaining.set(buy.id, currentRemaining - remainingSellQty);
+              remainingSellQty = 0;
+            }
+          }
+        }
+      });
+    });
+
+    // 只返回剩餘數量 > 0 的買入交易
+    const details = Array.from(buyTransactionDetails.values())
+      .filter((t: any) => {
+        const remaining = buyTransactionRemaining.get(t.id) || 0;
+        return remaining > 0;
+      })
+      .map((t: any) => {
+        const remaining = buyTransactionRemaining.get(t.id) || 0;
+        // 使用 floorTo2Decimals 處理價格 × 數量，避免浮點數誤差
+        const priceQty = floorTo2Decimals(t.price * remaining); // 使用剩餘數量計算
+        const isFinancing = t.transaction_type.includes('融資');
+        const isShortSell = t.transaction_type.includes('融券');
+
+        let transactionType = '現股';
+        if (isFinancing) transactionType = '融資';
+        else if (isShortSell) transactionType = '融券';
+
+        // 計算持有成本（基於剩餘數量，四捨五入到整數）
+        let holdingCost = 0;
+        if (transactionType === '現股') {
+          const feeRate = getDiscountFeeRate(t.etf_type, t.stock_code, true);
+          let fee = 0;
+          if (t.fee) {
+            // 如果資料庫中有手續費，按比例計算剩餘部分的手續費
+            fee = t.fee * (remaining / t.quantity);
+            fee = floorTo2Decimals(fee); // 保留兩位小數，避免浮點數誤差
+          } else {
+            fee = floorTo2Decimals(priceQty * feeRate);
+          }
+          // 確保 priceQty 和 fee 都是數字，然後相加再四捨五入
+          const totalCost = Number(priceQty) + Number(fee);
+          holdingCost = Math.round(totalCost); // 四捨五入到整數
+        } else if (transactionType === '融資') {
+          const financingAmount = calculateFinancingAmount(t.price, remaining, FINANCING_RATE);
+          const margin = priceQty - financingAmount;
+          const feeRate = getDiscountFeeRate(t.etf_type, t.stock_code, true);
+          let fee = 0;
+          if (t.fee) {
+            fee = t.fee * (remaining / t.quantity);
+            fee = Math.round(fee * 100) / 100; // 先保留兩位小數，避免浮點數誤差
+          } else {
+            fee = floorTo2Decimals(priceQty * feeRate);
+          }
+          const totalCost = Number(margin) + Number(fee);
+          holdingCost = Math.round(totalCost); // 四捨五入到整數
+        } else if (transactionType === '融券') {
+          const margin = calculateMargin(t.price, remaining, MARGIN_RATE);
+          holdingCost = Math.round(margin); // 四捨五入到整數
+        }
+
+        // 計算預估息（僅融資，基於剩餘數量）
+        let estimatedInterest = 0;
+        if (transactionType === '融資' && t.settlement_date) {
+          const days = daysBetween(t.settlement_date, today);
+          if (days > 0) {
+            const financingAmount = calculateFinancingAmount(t.price, remaining, FINANCING_RATE);
+            estimatedInterest = calculateInterest(financingAmount, FINANCING_INTEREST_RATE, days);
+          }
+        }
+
+        // 計算融資金額/券擔保品（基於剩餘數量）
+        let financingAmountOrCollateral = null;
+        if (transactionType === '融資') {
+          financingAmountOrCollateral = calculateFinancingAmount(t.price, remaining, FINANCING_RATE);
+        } else if (transactionType === '融券') {
+          const fee = t.fee ? (t.fee * (remaining / t.quantity)) : 0;
+          const tax = ((t.tax || 0) + (t.securities_tax || 0)) * (remaining / t.quantity);
+          const borrowingFee = (t.borrowing_fee || 0) * (remaining / t.quantity);
+          const totalFee = floorTo2Decimals(fee + tax + borrowingFee);
+          financingAmountOrCollateral = floorTo2Decimals(priceQty - totalFee);
+        }
+
+        return {
+          id: t.id,
+          account_name: t.account_name || '-',
+          transaction_type: transactionType,
+          stock_code: t.stock_code,
+          stock_name: t.stock_name,
+          trade_date: t.trade_date,
+          quantity: remaining, // 返回剩餘數量
+          original_quantity: t.quantity, // 原始買入數量
+          price: t.price,
+          holding_cost: holdingCost,
+          estimated_interest: estimatedInterest,
+          financing_amount_or_collateral: financingAmountOrCollateral,
+          currency: t.currency || 'TWD',
+          buy_reason: t.buy_reason || '',
+        };
+      })
+      .sort((a, b) => {
+        // 按交易日期倒序排列
+        if (a.trade_date !== b.trade_date) {
+          return b.trade_date.localeCompare(a.trade_date);
+        }
+        return b.id - a.id;
+      });
 
     res.json({
       success: true,

@@ -229,17 +229,16 @@ const StockAnnouncements = () => {
 
   // 選擇股票並載入詳細資訊（未使用，保留備用）
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  // @ts-ignore - 未使用的函數，保留備用
   const _handleSelectStock = async (_stock: StockInfo) => {
-    setSelectedStock(_stock);
-    setSearchKeyword(`${_stock.stock_code} ${_stock.stock_name}`);
+    setSelectedStock(stock);
+    setSearchKeyword(`${stock.stock_code} ${stock.stock_name}`);
     setSearchResults([]);
     setSearchPerformed(false); // 隱藏搜尋結果列表
     
     // 載入股票詳細資訊
     try {
       setLoadingDetail(true);
-      const response = await axios.get(`/api/stocks/${_stock.stock_code}/detail`);
+      const response = await axios.get(`/api/stocks/${stock.stock_code}/detail`);
       if (response.data.success) {
         setStockDetail(response.data.data);
       }
@@ -247,7 +246,7 @@ const StockAnnouncements = () => {
       console.error('載入股票詳細資訊失敗:', err);
       // 即使失敗也顯示基本信息
       setStockDetail({
-        stockInfo: _stock,
+        stockInfo: stock,
         priceInfo: null,
         dividends: [],
         dividendStats: {
@@ -479,11 +478,11 @@ const StockAnnouncements = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {searchResults.map((stock: StockInfo, index: number) => (
+                  {searchResults.map((stock, index) => (
                     <tr
                       key={`${stock.stock_code}_${index}`}
                       className={`hover:bg-gray-50 ${
-                        selectedStock && selectedStock.stock_code === stock.stock_code ? 'bg-blue-50' : ''
+                        selectedStock?.stock_code === stock.stock_code ? 'bg-blue-50' : ''
                       }`}
                     >
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">

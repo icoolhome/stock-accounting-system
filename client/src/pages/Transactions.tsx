@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useLanguage } from '../contexts/LanguageContext';
 import axios from 'axios';
 import { format } from 'date-fns';
 import * as XLSX from 'xlsx';
@@ -47,19 +46,18 @@ interface Transaction {
   buy_reason?: string;
 }
 
+const TRANSACTION_TYPES = [
+  '普通買進',
+  '普通賣出',
+  '融資買進',
+  '融券賣出',
+  '融資賣出',
+  '融券買進',
+  '現股買進',
+  '現股賣出',
+];
+
 const Transactions = () => {
-  const { t } = useLanguage();
-  
-  const TRANSACTION_TYPES = [
-    t('transaction.type.normalBuy', '普通買進'),
-    t('transaction.type.normalSell', '普通賣出'),
-    t('transaction.type.marginBuy', '融資買進'),
-    t('transaction.type.shortSell', '融券賣出'),
-    t('transaction.type.marginSell', '融資賣出'),
-    t('transaction.type.shortBuy', '融券買進'),
-    t('transaction.type.cashBuy', '現股買進'),
-    t('transaction.type.cashSell', '現股賣出'),
-  ];
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<SecuritiesAccount[]>([]);
   const [currencies, setCurrencies] = useState<Currency[]>([]);
@@ -80,7 +78,7 @@ const Transactions = () => {
   const [sortField, setSortField] = useState<string>('trade_date');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [dragging, setDragging] = useState(false);
-  const [modalPosition, setModalPosition] = useState<{ x: number | null; y: number | null }>({ x: null, y: null });
+  const [modalPosition, setModalPosition] = useState({ x: 0, y: 0 });
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
   const [stockSearchResults, setStockSearchResults] = useState<
@@ -419,8 +417,6 @@ const Transactions = () => {
       currency: transaction.currency,
       buy_reason: transaction.buy_reason || '',
     });
-    // 重置模態框位置到中間
-    setModalPosition({ x: null, y: null });
     setShowModal(true);
   };
 
@@ -473,34 +469,18 @@ const Transactions = () => {
     if ((e.target as HTMLElement).closest('input, select, textarea, button')) {
       return;
     }
-    const modalElement = e.currentTarget as HTMLElement;
-    const rect = modalElement.getBoundingClientRect();
-    
-    // 如果當前是居中狀態，先計算實際位置
-    let currentX = modalPosition.x;
-    let currentY = modalPosition.y;
-    
-    if (currentX === null || currentY === null) {
-      // 居中狀態，計算實際像素位置
-      currentX = rect.left;
-      currentY = rect.top;
-      setModalPosition({ x: currentX, y: currentY });
-    }
-    
     setDragging(true);
     setDragStart({
-      x: e.clientX - currentX,
-      y: e.clientY - currentY,
+      x: e.clientX - modalPosition.x,
+      y: e.clientY - modalPosition.y,
     });
   };
 
   const handleModalMouseMove = (e: React.MouseEvent) => {
     if (dragging) {
-      const newX = e.clientX - dragStart.x;
-      const newY = e.clientY - dragStart.y;
       setModalPosition({
-        x: newX,
-        y: newY,
+        x: e.clientX - dragStart.x,
+        y: e.clientY - dragStart.y,
       });
     }
   };
@@ -703,14 +683,14 @@ const Transactions = () => {
   };
 
   if (loading && transactions.length === 0) {
-    return <div className="text-center py-8">{t('common.loading', '載入中...')}</div>;
+    return <div className="text-center py-8">載入中...</div>;
   }
 
   return (
     <div className="py-6" style={{ fontSize: uiSettings.fontSize }}>
       <div className="bg-white shadow rounded-lg p-6">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">{t('transactions.title', '交易記錄')}</h1>
+          <h1 className="text-2xl font-bold text-gray-900">交易記錄</h1>
           <div className="flex items-center gap-3">
             <button
               onClick={exportToExcel}
@@ -736,8 +716,6 @@ const Transactions = () => {
             <button
               onClick={() => {
                 resetForm();
-                // 重置模態框位置到中間
-                setModalPosition({ x: null, y: null });
                 setShowModal(true);
               }}
               className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium"
@@ -1280,12 +1258,9 @@ const Transactions = () => {
             <div
               className="relative mx-auto p-5 border w-full max-w-3xl shadow-lg rounded-md bg-white"
               style={{
-                position: 'fixed',
-                top: modalPosition.y === null ? '50%' : `${modalPosition.y}px`,
-                left: modalPosition.x === null ? '50%' : `${modalPosition.x}px`,
-                transform: modalPosition.y === null ? 'translate(-50%, -50%)' : 'none',
-                maxHeight: '90vh',
-                overflowY: 'auto',
+                marginTop: `${Math.max(20, modalPosition.y)}px`,
+                marginLeft: `${modalPosition.x}px`,
+                transform: 'translateX(-50%)',
               }}
               onMouseDown={handleModalMouseDown}
             >
