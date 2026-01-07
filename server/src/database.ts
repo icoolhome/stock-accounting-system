@@ -1,6 +1,7 @@
 import sqlite3 from 'sqlite3';
 import { promisify } from 'util';
 import path from 'path';
+import bcrypt from 'bcryptjs';
 
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, '../database.sqlite');
 
@@ -397,7 +398,6 @@ export const initDatabase = async (): Promise<void> => {
 
   // 初始化默認管理員帳號（如果不存在）
   try {
-    const bcrypt = require('bcryptjs');
     const defaultAdminEmail = 'admin@admin.com';
     const defaultAdminPassword = 'adminadmin';
     
