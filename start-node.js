@@ -96,7 +96,9 @@ function startServer(mode) {
     execSync(`cscript //nologo "${vbsFile}"`, { stdio: 'ignore' });
     return null;
   } else {
-    return spawn('npm', ['start'], {
+    // Windows 上需要使用 npm.cmd 或 shell: true
+    const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+    return spawn(npmCommand, ['start'], {
       cwd: serverDir,
       stdio: mode === 'background' ? 'ignore' : 'inherit',
       detached: mode === 'background',
@@ -119,7 +121,9 @@ function startClient(mode) {
     execSync(`cscript //nologo "${vbsFile}"`, { stdio: 'ignore' });
     return null;
   } else {
-    return spawn('npm', ['run', 'start:client'], {
+    // Windows 上需要使用 npm.cmd 或 shell: true
+    const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+    return spawn(npmCommand, ['run', 'start:client'], {
       cwd: __dirname,
       stdio: mode === 'background' ? 'ignore' : 'inherit',
       detached: mode === 'background',
@@ -202,7 +206,14 @@ async function main() {
     if (serverProcess) {
       serverProcess.on('error', (error) => {
         logError(`後端服務器啟動失敗: ${error.message}`);
-        if (clientProcess) clientProcess.kill();
+        // 只有在 clientProcess 成功啟動時才 kill
+        if (clientProcess && clientProcess.pid) {
+          try {
+            clientProcess.kill();
+          } catch (err) {
+            // 忽略 kill 錯誤
+          }
+        }
         process.exit(1);
       });
       
@@ -216,7 +227,14 @@ async function main() {
     if (clientProcess) {
       clientProcess.on('error', (error) => {
         logError(`前端客戶端啟動失敗: ${error.message}`);
-        if (serverProcess) serverProcess.kill();
+        // 只有在 serverProcess 成功啟動時才 kill
+        if (serverProcess && serverProcess.pid) {
+          try {
+            serverProcess.kill();
+          } catch (err) {
+            // 忽略 kill 錯誤
+          }
+        }
         process.exit(1);
       });
       
@@ -293,8 +311,20 @@ async function main() {
     } catch (error) {
       logError(`啟動失敗: ${error.message}`);
       logError(`詳細錯誤: ${error.stack || error}`);
-      if (serverProcess) serverProcess.kill();
-      if (clientProcess) clientProcess.kill();
+      if (serverProcess && serverProcess.pid) {
+        try {
+          serverProcess.kill();
+        } catch (err) {
+          // 忽略 kill 錯誤
+        }
+      }
+      if (clientProcess && clientProcess.pid) {
+        try {
+          clientProcess.kill();
+        } catch (err) {
+          // 忽略 kill 錯誤
+        }
+      }
       process.exit(1);
     }
   } else {
