@@ -19,6 +19,50 @@
 - **後端**: Node.js + Express + TypeScript
 - **資料庫**: SQLite（輕量級，無需額外安裝）
 
+## 專案結構
+
+```
+stock-accounting-system/
+├── client/                    # 前端應用
+│   ├── src/
+│   │   ├── components/        # React 組件
+│   │   ├── pages/            # 頁面組件
+│   │   │   ├── Dashboard.tsx      # 儀表板
+│   │   │   ├── Holdings.tsx       # 庫存管理
+│   │   │   ├── Transactions.tsx   # 交易記錄
+│   │   │   ├── Portfolio.tsx      # 投資組合
+│   │   │   └── ...
+│   │   ├── contexts/         # React Context
+│   │   └── utils/            # 工具函數
+│   ├── public/               # 靜態資源
+│   └── package.json
+│
+├── server/                   # 後端服務
+│   ├── src/
+│   │   ├── routes/           # API 路由
+│   │   │   ├── holdings.ts        # 庫存相關 API
+│   │   │   ├── transactions.ts    # 交易相關 API
+│   │   │   ├── settings.ts        # 設定相關 API
+│   │   │   └── ...
+│   │   ├── jobs/             # 定時任務
+│   │   ├── middleware/       # 中間件
+│   │   └── utils/            # 工具函數
+│   ├── database.sqlite       # SQLite 資料庫
+│   └── package.json
+│
+├── setup-node.bat           # 自動安裝腳本
+├── start-node.bat           # 啟動腳本
+├── stop-node.bat            # 停止腳本
+├── setup.js                 # Node.js 安裝邏輯
+├── start-node.js            # 啟動邏輯
+├── stop-node.js             # 停止邏輯
+│
+├── 安裝說明.md              # 安裝與使用指南
+├── RELEASE_NOTES.md         # 版本更新記錄
+├── README.md                # 本文件
+└── package.json             # 專案配置
+```
+
 ## 快速開始
 
 ### 自動安裝
