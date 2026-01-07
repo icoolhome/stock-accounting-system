@@ -395,6 +395,32 @@ export const initDatabase = async (): Promise<void> => {
     }
   }
 
+  // 初始化默認管理員帳號（如果不存在）
+  try {
+    const bcrypt = require('bcryptjs');
+    const defaultAdminEmail = 'admin@admin.com';
+    const defaultAdminPassword = 'adminadmin';
+    
+    const existingAdmin = await get<any>('SELECT * FROM users WHERE email = ?', [defaultAdminEmail]);
+    
+    if (!existingAdmin) {
+      const hashedPassword = await bcrypt.hash(defaultAdminPassword, 10);
+      await run(
+        'INSERT INTO users (email, password, username, role) VALUES (?, ?, ?, ?)',
+        [defaultAdminEmail, hashedPassword, '管理員', 'admin']
+      );
+      console.log('已創建默認管理員帳號：admin@admin.com / adminadmin');
+    } else {
+      // 如果管理員已存在但不是 admin 角色，更新為 admin
+      if (existingAdmin.role !== 'admin') {
+        await run('UPDATE users SET role = ? WHERE email = ?', ['admin', defaultAdminEmail]);
+        console.log('已更新管理員角色：admin@admin.com');
+      }
+    }
+  } catch (error: any) {
+    console.warn('初始化默認管理員帳號時發生錯誤（可忽略）:', error.message);
+  }
+
   console.log('資料庫表已初始化');
 };
 

@@ -882,6 +882,123 @@ router.put('/email', async (req: AuthRequest, res) => {
   }
 });
 
+// 獲取管理員帳號資訊（僅管理員）
+router.get('/admin-account', async (req: AuthRequest, res) => {
+  try {
+    if (req.userRole !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: '需要管理員權限',
+      });
+    }
+
+    // 獲取所有管理員帳號
+    const admins = await all<any>('SELECT id, email, username, role, created_at FROM users WHERE role = ?', ['admin']);
+
+    res.json({
+      success: true,
+      data: admins,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message || '獲取管理員帳號失敗',
+    });
+  }
+});
+
+// 更新管理員帳號和密碼（僅管理員）
+router.put('/admin-account', async (req: AuthRequest, res) => {
+  try {
+    if (req.userRole !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: '需要管理員權限',
+      });
+    }
+
+    const { adminId, newEmail, newPassword, newUsername } = req.body;
+
+    if (!adminId) {
+      return res.status(400).json({
+        success: false,
+        message: '請提供管理員ID',
+      });
+    }
+
+    // 驗證管理員是否存在
+    const admin: any = await get<any>('SELECT * FROM users WHERE id = ? AND role = ?', [adminId, 'admin']);
+    if (!admin) {
+      return res.status(404).json({
+        success: false,
+        message: '找不到該管理員帳號',
+      });
+    }
+
+    const bcrypt = require('bcryptjs');
+    const updates: string[] = [];
+    const params: any[] = [];
+
+    // 更新郵箱
+    if (newEmail && newEmail !== admin.email) {
+      // 檢查郵箱是否已被使用
+      const existing: any = await get<any>('SELECT * FROM users WHERE email = ? AND id != ?', [newEmail, adminId]);
+      if (existing) {
+        return res.status(400).json({
+          success: false,
+          message: '該郵箱已被使用',
+        });
+      }
+      updates.push('email = ?');
+      params.push(newEmail);
+    }
+
+    // 更新密碼
+    if (newPassword) {
+      if (newPassword.length < 8 || newPassword.length > 12) {
+        return res.status(400).json({
+          success: false,
+          message: '密碼長度必須在 8-12 位之間',
+        });
+      }
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      updates.push('password = ?');
+      params.push(hashedPassword);
+    }
+
+    // 更新用戶名
+    if (newUsername !== undefined) {
+      updates.push('username = ?');
+      params.push(newUsername || admin.email);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: '請提供要更新的資訊',
+      });
+    }
+
+    updates.push('updated_at = CURRENT_TIMESTAMP');
+    params.push(adminId);
+
+    await run(
+      `UPDATE users SET ${updates.join(', ')} WHERE id = ?`,
+      params
+    );
+
+    res.json({
+      success: true,
+      message: '管理員帳號更新成功',
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message || '更新管理員帳號失敗',
+    });
+  }
+});
+
 // 獲取即時匯率
 router.get('/exchange-rates', async (req: AuthRequest, res) => {
   try {

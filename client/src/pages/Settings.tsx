@@ -102,7 +102,10 @@ const Settings = () => {
     fetchCurrencies();
     fetchStockStats();
     fetchExchangeRates();
-  }, []);
+    if (user?.role === 'admin') {
+      fetchAdminAccounts();
+    }
+  }, [user]);
 
   const fetchSettings = async () => {
     try {
@@ -157,6 +160,71 @@ const Settings = () => {
       }
     } catch (err: any) {
       console.error('獲取匯率失敗:', err);
+    }
+  };
+
+  const fetchAdminAccounts = async () => {
+    try {
+      const response = await axios.get('/api/settings/admin-account');
+      if (response.data.success) {
+        setAdminAccounts(response.data.data || []);
+      }
+    } catch (err: any) {
+      console.error('獲取管理員帳號失敗:', err);
+    }
+  };
+
+  const handleSelectAdmin = (adminId: string) => {
+    const admin = adminAccounts.find(a => a.id.toString() === adminId);
+    if (admin) {
+      setAdminAccountSettings({
+        selectedAdminId: adminId,
+        newEmail: admin.email,
+        newPassword: '',
+        confirmPassword: '',
+        newUsername: admin.username || admin.email,
+      });
+    }
+  };
+
+  const handleUpdateAdminAccount = async () => {
+    if (!adminAccountSettings.selectedAdminId) {
+      setError('請選擇要更新的管理員帳號');
+      return;
+    }
+
+    if (adminAccountSettings.newPassword && adminAccountSettings.newPassword !== adminAccountSettings.confirmPassword) {
+      setError('新密碼與確認密碼不一致');
+      return;
+    }
+
+    if (adminAccountSettings.newPassword && (adminAccountSettings.newPassword.length < 8 || adminAccountSettings.newPassword.length > 12)) {
+      setError('密碼長度必須在 8-12 位之間');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError('');
+      await axios.put('/api/settings/admin-account', {
+        adminId: parseInt(adminAccountSettings.selectedAdminId),
+        newEmail: adminAccountSettings.newEmail || undefined,
+        newPassword: adminAccountSettings.newPassword || undefined,
+        newUsername: adminAccountSettings.newUsername || undefined,
+      });
+      setSuccess('管理員帳號更新成功');
+      setAdminAccountSettings({
+        selectedAdminId: '',
+        newEmail: '',
+        newPassword: '',
+        confirmPassword: '',
+        newUsername: '',
+      });
+      fetchAdminAccounts();
+    } catch (err: any) {
+      setError(err.response?.data?.message || '更新管理員帳號失敗');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -957,6 +1025,16 @@ const Settings = () => {
     };
   };
 
+  // 管理員帳號設定
+  const [adminAccounts, setAdminAccounts] = useState<any[]>([]);
+  const [adminAccountSettings, setAdminAccountSettings] = useState({
+    selectedAdminId: '',
+    newEmail: '',
+    newPassword: '',
+    confirmPassword: '',
+    newUsername: '',
+  });
+
   const tabs = [
     { id: 'api', label: 'API設定' },
     { id: 'currency', label: '幣別設定' },
@@ -967,6 +1045,7 @@ const Settings = () => {
     { id: 'password', label: '密碼設定' },
     { id: 'email', label: '郵箱設定' },
     { id: 'accounts', label: '帳戶相關' },
+    ...(user?.role === 'admin' ? [{ id: 'admin', label: '管理員設定' }] : []),
   ];
 
   return (
@@ -1852,6 +1931,153 @@ const Settings = () => {
             >
               更新郵箱
             </button>
+          </div>
+        )}
+
+        {/* 管理員設定 */}
+        {activeTab === 'admin' && user?.role === 'admin' && (
+          <div className="space-y-6">
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+              <h3 className="text-sm font-medium text-yellow-900 mb-2">⚠️ 管理員帳號管理</h3>
+              <p className="text-sm text-yellow-700">
+                首次安裝後，系統會自動創建默認管理員帳號：
+                <br />
+                <strong>郵箱：admin@admin.com</strong>
+                <br />
+                <strong>密碼：adminadmin</strong>
+                <br />
+                為了系統安全，建議首次登錄後立即修改管理員帳號和密碼。
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">選擇管理員帳號</label>
+                <select
+                  value={adminAccountSettings.selectedAdminId}
+                  onChange={(e) => handleSelectAdmin(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-md"
+                  style={{ width: '10cm' }}
+                >
+                  <option value="">請選擇管理員帳號</option>
+                  {adminAccounts.map((admin) => (
+                    <option key={admin.id} value={admin.id}>
+                      {admin.email} ({admin.username || '未設定'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {adminAccountSettings.selectedAdminId && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">新郵箱</label>
+                    <input
+                      type="email"
+                      value={adminAccountSettings.newEmail}
+                      onChange={(e) => setAdminAccountSettings({ ...adminAccountSettings, newEmail: e.target.value })}
+                      className="px-3 py-2 border border-gray-300 rounded-md"
+                      style={{ width: '10cm' }}
+                      placeholder="請輸入新郵箱"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">新用戶名</label>
+                    <input
+                      type="text"
+                      value={adminAccountSettings.newUsername}
+                      onChange={(e) => setAdminAccountSettings({ ...adminAccountSettings, newUsername: e.target.value })}
+                      className="px-3 py-2 border border-gray-300 rounded-md"
+                      style={{ width: '10cm' }}
+                      placeholder="請輸入新用戶名"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">新密碼（留空則不修改）</label>
+                    <input
+                      type="password"
+                      value={adminAccountSettings.newPassword}
+                      onChange={(e) => setAdminAccountSettings({ ...adminAccountSettings, newPassword: e.target.value })}
+                      className="px-3 py-2 border border-gray-300 rounded-md"
+                      style={{ width: '10cm' }}
+                      placeholder="8-12位數密碼"
+                      minLength={8}
+                      maxLength={12}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">確認新密碼</label>
+                    <input
+                      type="password"
+                      value={adminAccountSettings.confirmPassword}
+                      onChange={(e) => setAdminAccountSettings({ ...adminAccountSettings, confirmPassword: e.target.value })}
+                      className="px-3 py-2 border border-gray-300 rounded-md"
+                      style={{ width: '10cm' }}
+                      placeholder="請再次輸入新密碼"
+                      minLength={8}
+                      maxLength={12}
+                    />
+                  </div>
+
+                  <button
+                    onClick={handleUpdateAdminAccount}
+                    disabled={loading}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    更新管理員帳號
+                  </button>
+                </>
+              )}
+            </div>
+
+            <div className="mt-6">
+              <h3 className="text-sm font-medium text-gray-700 mb-2">所有管理員帳號</h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">郵箱</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">用戶名</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">角色</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">創建時間</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {adminAccounts.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-4 text-center text-sm text-gray-500">
+                          尚無管理員帳號
+                        </td>
+                      </tr>
+                    ) : (
+                      adminAccounts.map((admin) => (
+                        <tr key={admin.id}>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {admin.id}
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {admin.email}
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {admin.username || '-'}
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {admin.role || 'user'}
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {admin.created_at ? new Date(admin.created_at).toLocaleString('zh-TW') : '-'}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         )}
 
