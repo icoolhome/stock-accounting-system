@@ -40,7 +40,7 @@ function waitForServer(port, timeout = 60) {
     const checkInterval = setInterval(() => {
       try {
         if (process.platform === 'win32') {
-          const result = execSync(`netstat -an | findstr :${port}`, execOptions());
+          const result = execSync('netstat -an', execOptions());
           if (result.includes(`:${port}`)) {
             clearInterval(checkInterval);
             resolve();
@@ -68,14 +68,14 @@ function waitForServer(port, timeout = 60) {
 function openBrowser(url) {
   try {
     if (process.platform === 'win32') {
-      // Windows
-      execSync(`start ${url}`, { stdio: 'ignore' });
+      // Windows - 使用 spawn 而不是 execSync 來避免 shell 警告
+      spawn('cmd', ['/c', 'start', url], { stdio: 'ignore', shell: false });
     } else if (process.platform === 'darwin') {
       // macOS
-      execSync(`open ${url}`, { stdio: 'ignore' });
+      spawn('open', [url], { stdio: 'ignore' });
     } else {
       // Linux
-      execSync(`xdg-open ${url}`, { stdio: 'ignore' });
+      spawn('xdg-open', [url], { stdio: 'ignore' });
     }
     logSuccess(`已在瀏覽器中打開: ${url}`);
   } catch (err) {
@@ -100,7 +100,8 @@ function startServer(mode) {
       cwd: serverDir,
       stdio: mode === 'background' ? 'ignore' : 'inherit',
       detached: mode === 'background',
-      shell: true
+      shell: false,
+      env: { ...process.env, CHCP: '65001' }
     });
   }
 }
@@ -122,14 +123,16 @@ function startClient(mode) {
       cwd: __dirname,
       stdio: mode === 'background' ? 'ignore' : 'inherit',
       detached: mode === 'background',
-      shell: true
+      shell: false,
+      env: { ...process.env, CHCP: '65001' }
     });
   }
 }
 
 // 檢查必要文件是否存在
-function checkPrerequisites() {
+async function checkPrerequisites() {
   const serverDist = path.join(__dirname, 'server', 'dist', 'index.js');
+  const clientDist = path.join(__dirname, 'client', 'dist');
   const serverPackageJson = path.join(__dirname, 'server', 'package.json');
   const clientPackageJson = path.join(__dirname, 'client', 'package.json');
   
@@ -144,12 +147,31 @@ function checkPrerequisites() {
   if (!fs.existsSync(serverDist)) {
     logWarn('警告: 服務器未編譯，可能無法啟動。請先執行: cd server && npm run build');
   }
+  
+  // 檢查前端是否已構建，如果沒有則自動構建
+  if (!fs.existsSync(clientDist)) {
+    logWarn('前端未構建，正在自動構建前端...');
+    try {
+      const clientDir = path.join(__dirname, 'client');
+      logInfo('正在執行: cd client && npm run build');
+      execSync('npm run build', {
+        cwd: clientDir,
+        stdio: 'inherit',
+        encoding: 'utf8',
+        env: { ...process.env, CHCP: '65001' }
+      });
+      logSuccess('前端構建完成');
+    } catch (error) {
+      logError(`前端構建失敗: ${error.message}`);
+      throw new Error('前端構建失敗，請手動執行: cd client && npm run build');
+    }
+  }
 }
 
 // 主程序
 async function main() {
   try {
-    checkPrerequisites();
+    await checkPrerequisites();
   } catch (error) {
     logError(`環境檢查失敗: ${error.message}`);
     process.exit(1);
