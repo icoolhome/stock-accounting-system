@@ -285,8 +285,20 @@ async function main() {
       // 保持進程運行
       process.on('SIGINT', () => {
         logInfo('正在停止服務...');
-        if (serverProcess) serverProcess.kill();
-        if (clientProcess) clientProcess.kill();
+        if (serverProcess && serverProcess.pid) {
+          try {
+            serverProcess.kill();
+          } catch (err) {
+            // 忽略 kill 錯誤
+          }
+        }
+        if (clientProcess && clientProcess.pid) {
+          try {
+            clientProcess.kill();
+          } catch (err) {
+            // 忽略 kill 錯誤
+          }
+        }
         process.exit(0);
       });
       
