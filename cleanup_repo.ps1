@@ -111,3 +111,4 @@ Write-Host "1. 檢查變更: git status" -ForegroundColor White
 Write-Host "2. 提交變更: git commit -m 'chore: Remove temporary and obsolete files'" -ForegroundColor White
 Write-Host "3. 推送到 GitHub: git push origin master" -ForegroundColor White
 
+

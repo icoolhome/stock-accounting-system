@@ -116,9 +116,12 @@ const Transactions = () => {
 
   // 手續費設定（用於自動計算）
   const [feeSettings, setFeeSettings] = useState({
-    feeDiscount: 0.65,
-    baseFeeRate: 0.1425,
-    taxRate: 0.3,
+    buyFeeDiscount: 0.6, // 買進手續費折扣（預設6折）
+    sellFeeDiscount: 0.6, // 賣出手續費折扣（預設6折）
+    baseFeeRate: 0.1425, // 一般股票手續費率（預設0.1425%）
+    etfFeeRate: 0.1425, // 股票型ETF手續費率（預設0.1425%）
+    taxRate: 0.3, // 一般股票交易稅率（預設0.3%）
+    etfTaxRate: 0.1, // 股票型ETF交易稅率（預設0.1%）
     minFee: 20,
   });
 
@@ -223,7 +226,21 @@ const Transactions = () => {
     try {
       const response = await axios.get('/api/settings');
       if (response.data.data?.feeSettings) {
-        setFeeSettings(response.data.data.feeSettings);
+        const settings = response.data.data.feeSettings;
+        // 兼容舊設定：如果有feeDiscount但沒有buyFeeDiscount和sellFeeDiscount，則使用feeDiscount作為兩者的值
+        if (settings.feeDiscount !== undefined && !settings.buyFeeDiscount && !settings.sellFeeDiscount) {
+          settings.buyFeeDiscount = settings.feeDiscount;
+          settings.sellFeeDiscount = settings.feeDiscount;
+        }
+        setFeeSettings({
+          buyFeeDiscount: settings.buyFeeDiscount || 0.6,
+          sellFeeDiscount: settings.sellFeeDiscount || 0.6,
+          baseFeeRate: settings.baseFeeRate || 0.1425,
+          etfFeeRate: settings.etfFeeRate || 0.1425,
+          taxRate: settings.taxRate || 0.3,
+          etfTaxRate: settings.etfTaxRate || 0.1,
+          minFee: settings.minFee || 20,
+        });
       }
       if (response.data.data?.uiSettings) {
         setUiSettings(response.data.data.uiSettings);
@@ -250,6 +267,18 @@ const Transactions = () => {
     }
   };
 
+  // 判斷股票是否為ETF（根據股票代碼）
+  const isEtfByCode = (stockCode: string): boolean => {
+    if (!stockCode) return false;
+    // 006XXX（6位數字開頭）
+    if (/^006\d{3}$/.test(stockCode)) return true;
+    // 00XXX 後面接 L/R/U/B/A（槓桿/反向/期貨/債券/主動式）
+    if (/^00\d{3}[LRUBA]$/.test(stockCode)) return true;
+    // 00XXX（純5位數字，大多數 ETF）
+    if (/^00\d{3}$/.test(stockCode)) return true;
+    return false;
+  };
+
   // 自動計算成交價金、總金額和持有成本
   useEffect(() => {
     const price = (formData.price === '' ? 0 : Number(formData.price)) || 0;
@@ -259,8 +288,19 @@ const Transactions = () => {
     // 如果手續費為0，且股價和數量都有值，則自動計算手續費（但不更新 formData.fee，只計算總金額）
     if (fee === 0 && price > 0 && quantity > 0) {
       const transactionAmount = price * quantity;
-      const baseFee = transactionAmount * (feeSettings.baseFeeRate / 100);
-      const discountedFee = baseFee * feeSettings.feeDiscount;
+      
+      // 判斷是否為買進或賣出
+      const isBuy = formData.transaction_type?.includes('買進') || formData.transaction_type?.includes('買入') || formData.transaction_type?.includes('買');
+      
+      // 判斷是否為ETF
+      const isEtf = isEtfByCode(formData.stock_code || '');
+      
+      // 根據股票類型和交易類型選擇正確的手續費率和折扣
+      const feeRate = isEtf ? feeSettings.etfFeeRate : feeSettings.baseFeeRate;
+      const discount = isBuy ? feeSettings.buyFeeDiscount : feeSettings.sellFeeDiscount;
+      
+      const baseFee = transactionAmount * (feeRate / 100);
+      const discountedFee = baseFee * discount;
       fee = Math.max(discountedFee, feeSettings.minFee);
     }
 
@@ -274,7 +314,7 @@ const Transactions = () => {
       total_amount: totalAmount || ('' as number | ''),
       holding_cost: holdingCostManuallyEdited ? prev.holding_cost : (holdingCost || ('' as number | ''))
     }));
-  }, [formData.price, formData.quantity, formData.fee, feeSettings, holdingCostManuallyEdited]);
+  }, [formData.price, formData.quantity, formData.fee, formData.transaction_type, formData.stock_code, feeSettings, holdingCostManuallyEdited]);
 
   // 當成交日期改變時，自動更新交割日期（成交日期 + 2 個交易日，T+2，跳過週末和國定假日）
   useEffect(() => {

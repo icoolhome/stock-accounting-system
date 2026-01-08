@@ -1,4 +1,4 @@
-﻿@echo off
+@echo off
 chcp 65001 > nul
 cd /d "%~dp0"
 node start-node.js
@@ -9,4 +9,5 @@ if errorlevel 1 (
     exit /b %errorlevel%
 )
 pause
+
 

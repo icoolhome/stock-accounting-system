@@ -14,6 +14,8 @@ const WelcomeGuide = () => {
   const handleMarkAsRead = () => {
     localStorage.setItem('hasSeenWelcomeGuide', 'true');
     setHasSeenGuide(true);
+    // 標記為已看過後，跳轉回首頁
+    navigate('/');
   };
 
   return (
@@ -148,8 +150,8 @@ const WelcomeGuide = () => {
               </div>
               <div className="flex-1 w-full">
                 <p className="text-gray-800 font-medium mb-3">讚賞碼</p>
-                <div className="flex flex-row items-center justify-between gap-6 w-full">
-                  <div className="flex flex-row items-center gap-3 flex-1" style={{ minWidth: 0 }}>
+                <div className="flex flex-col gap-4 w-full">
+                  <div className="flex flex-row items-center gap-3 flex-wrap">
                     <span className="text-gray-700 font-medium text-sm">
                       感謝您的使用，如有任何問題歡迎聯繫我們
                     </span>
@@ -168,20 +170,49 @@ const WelcomeGuide = () => {
                       icoolhome001@gmail.com
                     </a>
                   </div>
-                  <div className="text-center flex-shrink-0">
-                    <div className="flex gap-4 justify-center">
-                      {/* 這裡可以添加讚賞碼圖片或 QR Code */}
-                      <div className="bg-gray-50 p-3 rounded border border-gray-200">
-                        <p className="text-xs text-gray-600 font-medium mb-1">LinePay</p>
-                        <p className="text-xs text-gray-400">讚賞碼</p>
+                  <div className="text-center">
+                    <div className="flex gap-4 justify-center flex-wrap">
+                      {/* 微信 讚賞碼 */}
+                      <div className="bg-gray-50 p-3 rounded border border-gray-200 flex flex-col items-center">
+                        <p className="text-xs text-gray-600 font-medium mb-2">微信</p>
+                        <img 
+                          src="/qrcode.png" 
+                          alt="微信 讚賞碼" 
+                          className="h-auto"
+                          style={{ width: '576px', maxWidth: '100%' }}
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                          }}
+                        />
                       </div>
-                      <div className="bg-gray-50 p-3 rounded border border-gray-200">
-                        <p className="text-xs text-gray-600 font-medium mb-1">全支付</p>
-                        <p className="text-xs text-gray-400">讚賞碼</p>
+                      {/* 富邦 讚賞碼 */}
+                      <div className="bg-gray-50 p-3 rounded border border-gray-200 flex flex-col items-center">
+                        <p className="text-xs text-gray-600 font-medium mb-2">富邦</p>
+                        <img 
+                          src="/qrcode1.png" 
+                          alt="富邦 讚賞碼" 
+                          className="h-auto"
+                          style={{ width: '330px', maxWidth: '100%' }}
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                          }}
+                        />
                       </div>
-                      <div className="bg-gray-50 p-3 rounded border border-gray-200">
-                        <p className="text-xs text-gray-600 font-medium mb-1">富邦</p>
-                        <p className="text-xs text-gray-400">讚賞碼</p>
+                      {/* 全支付 讚賞碼 */}
+                      <div className="bg-gray-50 p-3 rounded border border-gray-200 flex flex-col items-center">
+                        <p className="text-xs text-gray-600 font-medium mb-2">全支付</p>
+                        <img 
+                          src="/qrcode2.png" 
+                          alt="全支付 讚賞碼" 
+                          className="h-auto"
+                          style={{ width: '475px', maxWidth: '100%' }}
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                          }}
+                        />
                       </div>
                     </div>
                   </div>

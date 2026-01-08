@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -9,8 +9,15 @@ const Login = () => {
   const [username, setUsername] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showAdminHint, setShowAdminHint] = useState(false);
   const { login, register } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    // 檢查是否已經看過默認管理員帳號提示
+    const hasSeenAdminHint = localStorage.getItem('hasSeenAdminHint');
+    setShowAdminHint(!hasSeenAdminHint);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,20 +47,34 @@ const Login = () => {
           </h2>
         </div>
         
-        {/* 默認管理員帳號提示 */}
-        {!isRegister && (
+        {/* 默認管理員帳號提示（只在初次顯示） */}
+        {!isRegister && showAdminHint && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <h3 className="text-sm font-medium text-yellow-900 mb-2">📌 默認管理員帳號</h3>
-            <p className="text-sm text-yellow-700 mb-2">
-              首次安裝後，系統會自動創建默認管理員帳號：
-            </p>
-            <div className="text-sm text-yellow-800 font-mono bg-yellow-100 p-2 rounded">
-              <div>郵箱：<strong>admin@admin.com</strong></div>
-              <div>密碼：<strong>adminadmin</strong></div>
+            <div className="flex justify-between items-start">
+              <div className="flex-1">
+                <h3 className="text-sm font-medium text-yellow-900 mb-2">📌 默認管理員帳號</h3>
+                <p className="text-sm text-yellow-700 mb-2">
+                  首次安裝後，系統會自動創建默認管理員帳號：
+                </p>
+                <div className="text-sm text-yellow-800 font-mono bg-yellow-100 p-2 rounded">
+                  <div>郵箱：<strong>admin@admin.com</strong></div>
+                  <div>密碼：<strong>adminadmin</strong></div>
+                </div>
+                <p className="text-xs text-yellow-600 mt-2">
+                  ⚠️ 建議首次登錄後立即前往「後台管理」→「管理員設定」修改帳號和密碼
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  localStorage.setItem('hasSeenAdminHint', 'true');
+                  setShowAdminHint(false);
+                }}
+                className="text-yellow-600 hover:text-yellow-800 ml-2"
+                title="不再顯示"
+              >
+                ✕
+              </button>
             </div>
-            <p className="text-xs text-yellow-600 mt-2">
-              ⚠️ 建議首次登錄後立即前往「系統設定」→「管理員設定」修改帳號和密碼
-            </p>
           </div>
         )}
 

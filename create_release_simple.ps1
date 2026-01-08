@@ -15,3 +15,4 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "Failed to create release" -ForegroundColor Red
 }
 
+

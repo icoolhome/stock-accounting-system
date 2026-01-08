@@ -26,6 +26,9 @@ interface Holding {
   profit_loss: number;
   profit_loss_percent: number;
   currency: string;
+  // 價格來源資訊
+  price_source?: string | null; // 'realtime' 或 'close'
+  price_updated_at?: number | null; // 時間戳
   // 以下欄位可能需要在後端計算或前端顯示為空
   desired_price?: number; // 欲委託價
   desired_quantity?: number; // 欲委託量
@@ -515,7 +518,30 @@ const Holdings = () => {
                         </td>
                         {/* 市價 */}
                         <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
-                          {formatValue(holding.current_price || holding.cost_price)}
+                          <div className="flex flex-col items-end">
+                            <span>{formatValue(holding.current_price || holding.cost_price)}</span>
+                            {holding.price_source && (
+                              <span className={`text-xs mt-0.5 ${
+                                holding.price_source === 'realtime' 
+                                  ? 'text-green-600' 
+                                  : 'text-gray-500'
+                              }`} title={
+                                holding.price_source === 'realtime' 
+                                  ? '即時價格' 
+                                  : '收盤價'
+                              }>
+                                {holding.price_source === 'realtime' ? '⚡即時' : '📊收盤'}
+                                {holding.price_updated_at && (
+                                  <span className="text-gray-400 ml-1">
+                                    {new Date(holding.price_updated_at).toLocaleTimeString('zh-TW', { 
+                                      hour: '2-digit', 
+                                      minute: '2-digit' 
+                                    })}
+                                  </span>
+                                )}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         {/* 股票市值 */}
                         <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900 text-right">

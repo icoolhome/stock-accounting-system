@@ -201,13 +201,22 @@ const Admin = () => {
       setLoading(true);
       // 只發送非空字段
       const updateData: any = {};
+      let hasUpdate = false;
       if (updateAdminForm.email && updateAdminForm.email.trim() !== '') {
         updateData.email = updateAdminForm.email.trim();
+        hasUpdate = true;
       }
       if (updateAdminForm.password && updateAdminForm.password.trim() !== '') {
         updateData.password = updateAdminForm.password.trim();
+        hasUpdate = true;
       }
       await axios.put('/api/admin/admin/current', updateData);
+      
+      // 如果成功更新了帳號或密碼，標記為已看過默認管理員提示
+      if (hasUpdate) {
+        localStorage.setItem('hasSeenAdminHint', 'true');
+      }
+      
       setSuccess('設定已更新，請重新登入');
       setUpdateAdminForm({ email: '', password: '' });
       setTimeout(() => {
@@ -637,6 +646,20 @@ const Admin = () => {
 
             <div className="mt-6">
               <h3 className="text-md font-semibold text-gray-800 mb-4">更新當前管理員設定</h3>
+              
+              {/* 默認管理員帳號提示 */}
+              <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded text-sm mb-4">
+                <strong>默認管理員帳號</strong>
+                <br />
+                首次安裝後，系統會自動創建默認管理員帳號：
+                <br />
+                <strong>郵箱：</strong>admin@admin.com
+                <br />
+                <strong>密碼：</strong>adminadmin
+                <br />
+                <span className="text-orange-600 font-medium">⚠️ 建議首次登錄後立即前往「後台管理」→「管理員設定」修改帳號和密碼</span>
+              </div>
+              
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">

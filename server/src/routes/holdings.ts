@@ -160,34 +160,128 @@ const fetchStockPrice = async (stockCode: string, marketType: string): Promise<n
   }
 };
 
-// 批量獲取股票價格（緩存機制）
-let priceCache: Map<string, { price: number; timestamp: number }> = new Map();
-const CACHE_DURATION = 60000; // 緩存1分鐘
+// 判斷是否為台股交易時間（週一至週五 09:00-13:30，台灣時區）
+const isTradingHours = (): boolean => {
+  const now = new Date();
+  const taiwanTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
+  const dayOfWeek = taiwanTime.getDay(); // 0 = 週日, 1 = 週一, ..., 6 = 週六
+  const hours = taiwanTime.getHours();
+  const minutes = taiwanTime.getMinutes();
+  const time = hours * 60 + minutes;
+
+  // 週一到週五
+  if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+    // 09:00-13:30 (540-810 分鐘)
+    if (time >= 540 && time <= 810) {
+      return true;
+    }
+  }
+  return false;
+};
+
+// 判斷是否為交易日期（週一至週五，排除國定假日）
+const isTradingDay = (): boolean => {
+  const now = new Date();
+  const taiwanTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
+  const dayOfWeek = taiwanTime.getDay();
+  // 週一到週五為交易日（簡化版，不考慮國定假日）
+  return dayOfWeek >= 1 && dayOfWeek <= 5;
+};
+
+// 批量獲取股票價格（緩存機制 + 智能數據來源切換）
+let priceCache: Map<string, { price: number; timestamp: number; source: string }> = new Map();
+
+// 根據交易時間動態調整緩存時間
+const getCacheDuration = (): number => {
+  if (isTradingHours()) {
+    return 60000; // 盤中：緩存1分鐘
+  } else if (isTradingDay()) {
+    return 3600000; // 盤後：緩存1小時
+  } else {
+    return 86400000; // 非交易日：緩存24小時
+  }
+};
+
+// 從 TWSE OpenAPI 獲取收盤價（作為降級方案）
+const fetchClosePricesFromOpenAPI = async (
+  stockCodes: string[]
+): Promise<Map<string, number>> => {
+  const result = new Map<string, number>();
+  if (!stockCodes.length) return result;
+
+  try {
+    const response = await fetch('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0',
+      },
+    });
+
+    if (!response.ok) {
+      console.error('TWSE OpenAPI 請求失敗:', response.status);
+      return result;
+    }
+
+    const data = (await response.json()) as any[];
+    
+    stockCodes.forEach((code) => {
+      const stock = data.find((item: any) => {
+        const itemCode = item.Code || item.code || item.股票代號;
+        return itemCode === code || itemCode === code.padStart(6, '0');
+      });
+
+      if (stock) {
+        // 優先使用收盤價
+        const closePrice = stock.Close || stock.close || stock.收盤價;
+        if (closePrice && !isNaN(parseFloat(closePrice))) {
+          result.set(code, parseFloat(closePrice));
+          return;
+        }
+        // 如果收盤價不可用，使用最後成交價
+        const lastPrice = stock.Z || stock.z || stock.最後成交價 || stock.Price || stock.price;
+        if (lastPrice && !isNaN(parseFloat(lastPrice))) {
+          result.set(code, parseFloat(lastPrice));
+        }
+      }
+    });
+  } catch (error: any) {
+    console.error('從 TWSE OpenAPI 獲取收盤價失敗:', error.message);
+  }
+
+  return result;
+};
 
 const fetchStockPricesBatch = async (
   stockCodes: string[],
   marketTypes: string[],
-  etfFlagsByCode: Map<string, boolean>
-): Promise<Map<string, number>> => {
-  const priceMap = new Map<string, number>();
+  etfFlagsByCode: Map<string, boolean>,
+  priceSource?: string // 'auto' | 'twse_stock_day_all' | 'twse_mi_index' | 'tpex' | 'realtime'
+): Promise<Map<string, { price: number; source: string; updatedAt: number }>> => {
+  const priceMap = new Map<string, { price: number; source: string; updatedAt: number }>();
   const now = Date.now();
+  const cacheDuration = getCacheDuration();
 
-  // 先檢查緩存，並統計需要重新抓取的代碼與其中 ETF 代碼
+  // 決定使用哪種數據來源
+  const useRealtime = priceSource === 'realtime' || (priceSource === 'auto' && isTradingHours());
+  const useClosePrice = priceSource === 'twse_stock_day_all' || (!useRealtime && (priceSource === 'auto' || !priceSource));
+
+  // 先檢查緩存
   const codesToFetch: string[] = [];
-  const etfCodesToFetch: string[] = [];
+  const marketTypesToFetch: string[] = [];
 
   stockCodes.forEach((code, index) => {
     const cacheKey = code;
     const cached = priceCache.get(cacheKey);
-    const isEtf = !!etfFlagsByCode.get(code);
 
-    if (cached && now - cached.timestamp < CACHE_DURATION) {
-      priceMap.set(code, cached.price);
+    // 檢查緩存是否有效（根據當前交易狀態使用不同的緩存時間）
+    if (cached && now - cached.timestamp < cacheDuration) {
+      priceMap.set(code, { 
+        price: cached.price, 
+        source: cached.source, 
+        updatedAt: cached.timestamp 
+      });
     } else {
       codesToFetch.push(code);
-      if (isEtf) {
-        etfCodesToFetch.push(code);
-      }
+      marketTypesToFetch.push(marketTypes[index] || '上市');
     }
   });
 
@@ -197,16 +291,43 @@ const fetchStockPricesBatch = async (
   }
 
   try {
-    if (codesToFetch.length > 0) {
+    // 盤中且使用即時數據，或明確要求即時數據
+    if (useRealtime) {
       const realtimeMap = await fetchRealtimePricesFromMis(
         codesToFetch,
-        codesToFetch.map((code, idx) => marketTypes[idx] || '上市')
+        marketTypesToFetch
       );
 
+      // 記錄成功獲取的代碼
+      const successCodes = new Set<string>();
+      
       realtimeMap.forEach((price, code) => {
         if (!isNaN(price) && price > 0) {
-          priceMap.set(code, price);
-          priceCache.set(code, { price, timestamp: now });
+          priceMap.set(code, { price, source: 'realtime', updatedAt: now });
+          priceCache.set(code, { price, timestamp: now, source: 'realtime' });
+          successCodes.add(code);
+        }
+      });
+
+      // 如果即時數據獲取失敗或部分失敗，降級到收盤價
+      const failedCodes = codesToFetch.filter(code => !successCodes.has(code));
+      if (failedCodes.length > 0) {
+        console.log(`即時數據獲取失敗，降級到收盤價，影響 ${failedCodes.length} 檔股票`);
+        const closePriceMap = await fetchClosePricesFromOpenAPI(failedCodes);
+        closePriceMap.forEach((price, code) => {
+          if (!isNaN(price) && price > 0) {
+            priceMap.set(code, { price, source: 'close', updatedAt: now });
+            priceCache.set(code, { price, timestamp: now, source: 'close' });
+          }
+        });
+      }
+    } else {
+      // 盤後或明確要求收盤價
+      const closePriceMap = await fetchClosePricesFromOpenAPI(codesToFetch);
+      closePriceMap.forEach((price, code) => {
+        if (!isNaN(price) && price > 0) {
+          priceMap.set(code, { price, source: 'close', updatedAt: now });
+          priceCache.set(code, { price, timestamp: now, source: 'close' });
         }
       });
     }
@@ -214,6 +335,18 @@ const fetchStockPricesBatch = async (
     return priceMap;
   } catch (error: any) {
     console.error(`批量獲取股票價格失敗:`, error.message);
+    // 發生錯誤時，嘗試使用收盤價作為最後手段
+    try {
+      const closePriceMap = await fetchClosePricesFromOpenAPI(codesToFetch);
+      closePriceMap.forEach((price, code) => {
+        if (!isNaN(price) && price > 0) {
+          priceMap.set(code, { price, source: 'close', updatedAt: now });
+          priceCache.set(code, { price, timestamp: now, source: 'close' });
+        }
+      });
+    } catch (fallbackError: any) {
+      console.error('降級到收盤價也失敗:', fallbackError.message);
+    }
     return priceMap;
   }
 };
@@ -244,7 +377,7 @@ router.get('/', async (req: AuthRequest, res) => {
 
     const transactions = await all<any>(query, params);
 
-    // 獲取手續費設定
+    // 獲取手續費設定和價格來源設定
     let feeSettings: any = {
       baseFeeRate: 0.1425, // 預設 0.1425%（一般股票證券商手續費，單邊）
       etfFeeRate: 0.1425, // 預設 0.1425%（股票型ETF證券商手續費，單邊）
@@ -254,31 +387,41 @@ router.get('/', async (req: AuthRequest, res) => {
       etfTaxRate: 0.1, // 預設 0.1%（股票型ETF證交稅，只有賣出時扣，台股標準）
     };
     
+    let priceSource = 'auto'; // 預設使用自動模式
+    
     try {
       const settings = await all<any>(
-        'SELECT setting_key, setting_value FROM system_settings WHERE user_id = ? AND setting_key = ?',
-        [req.userId, 'feeSettings']
+        'SELECT setting_key, setting_value FROM system_settings WHERE user_id = ? AND (setting_key = ? OR setting_key = ?)',
+        [req.userId, 'feeSettings', 'apiSettings']
       );
       
-      if (settings.length > 0 && settings[0].setting_value) {
-        const parsedSettings = JSON.parse(settings[0].setting_value);
-        feeSettings = { ...feeSettings, ...parsedSettings };
-        // 兼容舊設定：如果有feeDiscount但沒有buyFeeDiscount和sellFeeDiscount，則使用feeDiscount作為兩者的值
-        if (parsedSettings.feeDiscount !== undefined && !parsedSettings.buyFeeDiscount && !parsedSettings.sellFeeDiscount) {
-          feeSettings.buyFeeDiscount = parsedSettings.feeDiscount;
-          feeSettings.sellFeeDiscount = parsedSettings.feeDiscount;
+      settings.forEach((s: any) => {
+        try {
+          const parsed = JSON.parse(s.setting_value);
+          if (s.setting_key === 'feeSettings') {
+            feeSettings = { ...feeSettings, ...parsed };
+            // 兼容舊設定：如果有feeDiscount但沒有buyFeeDiscount和sellFeeDiscount，則使用feeDiscount作為兩者的值
+            if (parsed.feeDiscount !== undefined && !parsed.buyFeeDiscount && !parsed.sellFeeDiscount) {
+              feeSettings.buyFeeDiscount = parsed.feeDiscount;
+              feeSettings.sellFeeDiscount = parsed.feeDiscount;
+            }
+            // 兼容舊設定：如果沒有etfTaxRate，使用預設值0.1%
+            if (!parsed.etfTaxRate) {
+              feeSettings.etfTaxRate = 0.1;
+            }
+            // 兼容舊設定：如果沒有etfFeeRate，使用baseFeeRate作為ETF手續費率
+            if (!parsed.etfFeeRate) {
+              feeSettings.etfFeeRate = parsed.baseFeeRate || 0.1425;
+            }
+          } else if (s.setting_key === 'apiSettings' && parsed.priceSource) {
+            priceSource = parsed.priceSource;
+          }
+        } catch (parseErr) {
+          console.error(`解析設定 ${s.setting_key} 失敗:`, parseErr);
         }
-        // 兼容舊設定：如果沒有etfTaxRate，使用預設值0.1%
-        if (!parsedSettings.etfTaxRate) {
-          feeSettings.etfTaxRate = 0.1;
-        }
-        // 兼容舊設定：如果沒有etfFeeRate，使用baseFeeRate作為ETF手續費率
-        if (!parsedSettings.etfFeeRate) {
-          feeSettings.etfFeeRate = parsedSettings.baseFeeRate || 0.1425;
-        }
-      }
+      });
     } catch (err) {
-      console.error('讀取手續費設定失敗，使用預設值:', err);
+      console.error('讀取設定失敗，使用預設值:', err);
     }
 
     // 根據交易記錄計算庫存
@@ -615,15 +758,17 @@ router.get('/', async (req: AuthRequest, res) => {
       }
     });
 
-    // 批量獲取股票價格
-    const stockPrices = await fetchStockPricesBatch(stockCodesToFetch, marketTypesToFetch, etfFlagsByCode);
+    // 批量獲取股票價格（包含價格來源資訊）
+    const stockPrices = await fetchStockPricesBatch(stockCodesToFetch, marketTypesToFetch, etfFlagsByCode, priceSource);
 
-    // 更新holdingsMap中的價格
+    // 更新holdingsMap中的價格和價格來源資訊
     holdingsMap.forEach((h: any) => {
       if (h.isDomestic && h.stock_code) {
-        const realTimePrice = stockPrices.get(h.stock_code);
-        if (realTimePrice !== undefined && realTimePrice !== null && realTimePrice > 0) {
-          h.current_price = realTimePrice;
+        const priceInfo = stockPrices.get(h.stock_code);
+        if (priceInfo && priceInfo.price !== undefined && priceInfo.price !== null && priceInfo.price > 0) {
+          h.current_price = priceInfo.price;
+          h.price_source = priceInfo.source; // 'realtime' 或 'close'
+          h.price_updated_at = priceInfo.updatedAt; // 時間戳
         }
       }
     });
@@ -805,6 +950,9 @@ router.get('/', async (req: AuthRequest, res) => {
           profit_loss: profit_loss,
           profit_loss_percent: profit_loss_percent,
           currency: h.currency,
+          // 價格來源資訊
+          price_source: h.price_source || null, // 'realtime' 或 'close'
+          price_updated_at: h.price_updated_at || null, // 時間戳
           // 國外股票專用
           available_quantity: h.isDomestic ? null : quantity,
         };
@@ -876,20 +1024,23 @@ router.get('/details', async (req: AuthRequest, res) => {
 
     try {
       const settings = await all<any>(
-        'SELECT setting_value FROM user_settings WHERE user_id = ? AND setting_key = ?',
+        'SELECT setting_key, setting_value FROM system_settings WHERE user_id = ? AND setting_key = ?',
         [req.userId, 'feeSettings']
       );
       
       if (settings.length > 0 && settings[0].setting_value) {
         const parsedSettings = JSON.parse(settings[0].setting_value);
         feeSettings = { ...feeSettings, ...parsedSettings };
+        // 兼容舊設定：如果有feeDiscount但沒有buyFeeDiscount和sellFeeDiscount，則使用feeDiscount作為兩者的值
         if (parsedSettings.feeDiscount !== undefined && !parsedSettings.buyFeeDiscount && !parsedSettings.sellFeeDiscount) {
           feeSettings.buyFeeDiscount = parsedSettings.feeDiscount;
           feeSettings.sellFeeDiscount = parsedSettings.feeDiscount;
         }
+        // 兼容舊設定：如果沒有etfTaxRate，使用預設值0.1%
         if (!parsedSettings.etfTaxRate) {
           feeSettings.etfTaxRate = 0.1;
         }
+        // 兼容舊設定：如果沒有etfFeeRate，使用baseFeeRate或預設值
         if (!parsedSettings.etfFeeRate) {
           feeSettings.etfFeeRate = parsedSettings.baseFeeRate || 0.1425;
         }
