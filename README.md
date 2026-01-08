@@ -86,7 +86,7 @@ stock-accounting-system/
 
 ## 版本資訊
 
-**當前版本**: vS0005
+**當前版本**: vS0007
 
 ### vS0005 主要更新
 
@@ -122,3 +122,26 @@ stock-accounting-system/
 ## 授權
 
 MIT License
+
+## 讚賞碼
+
+感謝您的使用！如有任何問題歡迎聯繫我們：icoolhome001@gmail.com
+
+<div style="display: flex; gap: 12px; justify-content: flex-start; flex-wrap: wrap; margin-top: 16px;">
+  <div style="text-align: center; padding: 8px; border: 1px solid #e5e7eb; border-radius: 8px; background-color: #f9fafb;">
+    <p style="font-size: 12px; color: #4b5563; font-weight: 500; margin-bottom: 8px;">微信</p>
+    <img src="./docs/qrcode.png" alt="微信 讚賞碼" style="width: 300px; max-width: 100%; height: auto;" />
+  </div>
+  <div style="text-align: center; padding: 8px; border: 1px solid #e5e7eb; border-radius: 8px; background-color: #f9fafb;">
+    <p style="font-size: 12px; color: #4b5563; font-weight: 500; margin-bottom: 8px;">富邦</p>
+    <img src="./docs/qrcode1.png" alt="富邦 讚賞碼" style="width: 300px; max-width: 100%; height: auto;" />
+  </div>
+  <div style="text-align: center; padding: 8px; border: 1px solid #e5e7eb; border-radius: 8px; background-color: #f9fafb;">
+    <p style="font-size: 12px; color: #4b5563; font-weight: 500; margin-bottom: 8px;">全支付</p>
+    <img src="./docs/qrcode2.png" alt="全支付 讚賞碼" style="width: 300px; max-width: 100%; height: auto;" />
+  </div>
+  <div style="text-align: center; padding: 8px; border: 1px solid #e5e7eb; border-radius: 8px; background-color: #f9fafb;">
+    <p style="font-size: 12px; color: #4b5563; font-weight: 500; margin-bottom: 8px;">讚賞碼</p>
+    <img src="./docs/qrcode3.png" alt="讚賞碼" style="width: 300px; max-width: 100%; height: auto;" />
+  </div>
+</div>

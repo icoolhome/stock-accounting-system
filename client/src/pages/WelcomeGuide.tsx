@@ -170,16 +170,16 @@ const WelcomeGuide = () => {
                       icoolhome001@gmail.com
                     </a>
                   </div>
-                  <div className="text-center">
-                    <div className="flex gap-4 justify-center flex-wrap">
+                  <div className="w-full overflow-x-auto">
+                    <div className="flex gap-3 justify-start items-center flex-nowrap min-w-max px-4">
                       {/* 微信 讚賞碼 */}
-                      <div className="bg-gray-50 p-3 rounded border border-gray-200 flex flex-col items-center">
-                        <p className="text-xs text-gray-600 font-medium mb-2">微信</p>
+                      <div className="bg-gray-50 p-2 rounded border border-gray-200 flex flex-col items-center flex-shrink-0" style={{ minWidth: '300px' }}>
+                        <p className="text-xs text-gray-600 font-medium mb-1">微信</p>
                         <img 
                           src="/qrcode.png" 
                           alt="微信 讚賞碼" 
                           className="h-auto"
-                          style={{ width: '576px', maxWidth: '100%' }}
+                          style={{ width: '300px', maxWidth: '100%' }}
                           onError={(e) => {
                             const target = e.target as HTMLImageElement;
                             target.style.display = 'none';
@@ -187,13 +187,13 @@ const WelcomeGuide = () => {
                         />
                       </div>
                       {/* 富邦 讚賞碼 */}
-                      <div className="bg-gray-50 p-3 rounded border border-gray-200 flex flex-col items-center">
-                        <p className="text-xs text-gray-600 font-medium mb-2">富邦</p>
+                      <div className="bg-gray-50 p-2 rounded border border-gray-200 flex flex-col items-center flex-shrink-0" style={{ minWidth: '300px' }}>
+                        <p className="text-xs text-gray-600 font-medium mb-1">富邦</p>
                         <img 
                           src="/qrcode1.png" 
                           alt="富邦 讚賞碼" 
                           className="h-auto"
-                          style={{ width: '330px', maxWidth: '100%' }}
+                          style={{ width: '300px', maxWidth: '100%' }}
                           onError={(e) => {
                             const target = e.target as HTMLImageElement;
                             target.style.display = 'none';
@@ -201,13 +201,27 @@ const WelcomeGuide = () => {
                         />
                       </div>
                       {/* 全支付 讚賞碼 */}
-                      <div className="bg-gray-50 p-3 rounded border border-gray-200 flex flex-col items-center">
-                        <p className="text-xs text-gray-600 font-medium mb-2">全支付</p>
+                      <div className="bg-gray-50 p-2 rounded border border-gray-200 flex flex-col items-center flex-shrink-0" style={{ minWidth: '300px' }}>
+                        <p className="text-xs text-gray-600 font-medium mb-1">全支付</p>
                         <img 
                           src="/qrcode2.png" 
                           alt="全支付 讚賞碼" 
                           className="h-auto"
-                          style={{ width: '475px', maxWidth: '100%' }}
+                          style={{ width: '300px', maxWidth: '100%' }}
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                          }}
+                        />
+                      </div>
+                      {/* qrcode3 讚賞碼 */}
+                      <div className="bg-gray-50 p-2 rounded border border-gray-200 flex flex-col items-center flex-shrink-0" style={{ minWidth: '300px' }}>
+                        <p className="text-xs text-gray-600 font-medium mb-1">讚賞碼</p>
+                        <img 
+                          src="/qrcode3.png" 
+                          alt="讚賞碼" 
+                          className="h-auto"
+                          style={{ width: '300px', maxWidth: '100%' }}
                           onError={(e) => {
                             const target = e.target as HTMLImageElement;
                             target.style.display = 'none';
