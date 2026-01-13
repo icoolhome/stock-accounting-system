@@ -18,9 +18,42 @@ router.get('/', async (req: AuthRequest, res) => {
       [req.userId]
     );
 
+    // 計算每個帳戶的可用餘額
+    const accountsWithAvailableBalance = await Promise.all(
+      accounts.map(async (account: any) => {
+        // 現金餘額
+        const cashBalance = account.balance || 0;
+
+        // 獲取該帳戶下所有未交割的交割記錄
+        const pendingSettlements = await all<any>(
+          `SELECT s.settlement_amount 
+           FROM settlements s 
+           WHERE s.user_id = ? AND s.bank_account_id = ? AND s.status = '未交割'`,
+          [req.userId, account.id]
+        );
+
+        // settlement_amount 的符號：
+        // - 正數 = 需要支付（買進未交割）
+        // - 負數 = 會收到（賣出未交割）
+        // 所以：可用餘額 = 現金餘額 - 所有未交割記錄的settlement_amount總和
+        // 因為：正數會減少可用餘額（減），負數會增加可用餘額（減負數等於加）
+        const totalPendingAmount = pendingSettlements.reduce((sum: number, s: any) => sum + (s.settlement_amount || 0), 0);
+
+        // 可用餘額 ≈ 現金餘額 + 賣出未交割 - 買進未交割 - 委買凍結
+        // 目前系統中沒有委買凍結的概念，暫時設為0
+        const orderFreezeAmount = 0; // 委買凍結（暫時為0）
+        const availableBalance = cashBalance - totalPendingAmount - orderFreezeAmount;
+
+        return {
+          ...account,
+          available_balance: availableBalance,
+        };
+      })
+    );
+
     res.json({
       success: true,
-      data: accounts,
+      data: accountsWithAvailableBalance,
     });
   } catch (error: any) {
     res.status(500).json({
@@ -39,6 +72,7 @@ router.post('/', async (req: AuthRequest, res) => {
       account_number,
       account_type = '儲蓄帳戶',
       balance = 0,
+      available_balance = 0,
       currency = 'TWD',
     } = req.body;
 
@@ -50,8 +84,8 @@ router.post('/', async (req: AuthRequest, res) => {
     }
 
     const result = await run(
-      'INSERT INTO bank_accounts (user_id, securities_account_id, bank_name, account_number, account_type, balance, currency) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [req.userId, securities_account_id || null, bank_name, account_number, account_type, balance, currency]
+      'INSERT INTO bank_accounts (user_id, securities_account_id, bank_name, account_number, account_type, balance, available_balance, currency) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [req.userId, securities_account_id || null, bank_name, account_number, account_type, balance, available_balance, currency]
     );
     const newBankAccountId = result.lastID;
 
@@ -74,7 +108,7 @@ router.post('/', async (req: AuthRequest, res) => {
 router.put('/:id', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
-    const { securities_account_id, bank_name, account_number, account_type, balance, currency } = req.body;
+    const { securities_account_id, bank_name, account_number, account_type, balance, available_balance, currency } = req.body;
 
     const account: any = await get<any>(
       'SELECT * FROM bank_accounts WHERE id = ? AND user_id = ?',
@@ -89,8 +123,8 @@ router.put('/:id', async (req: AuthRequest, res) => {
     }
 
     await run(
-      'UPDATE bank_accounts SET securities_account_id = ?, bank_name = ?, account_number = ?, account_type = ?, balance = ?, currency = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?',
-      [securities_account_id || null, bank_name, account_number, account_type, balance, currency, id, req.userId]
+      'UPDATE bank_accounts SET securities_account_id = ?, bank_name = ?, account_number = ?, account_type = ?, balance = ?, available_balance = ?, currency = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?',
+      [securities_account_id || null, bank_name, account_number, account_type, balance, available_balance || 0, currency, id, req.userId]
     );
 
     res.json({
@@ -134,6 +168,7 @@ router.delete('/:id', async (req: AuthRequest, res) => {
     });
   }
 });
+
 
 export default router;
 

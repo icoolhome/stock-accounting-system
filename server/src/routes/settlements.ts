@@ -79,6 +79,7 @@ router.post('/', async (req: AuthRequest, res) => {
       twd_amount,
       status = '未交割',
       notes,
+      skipAutoBankTransaction,
     } = req.body;
 
     if (!bank_account_id || !settlement_date || !settlement_amount) {
@@ -110,8 +111,8 @@ router.post('/', async (req: AuthRequest, res) => {
       [req.userId, null, transactionIdsJson, bank_account_id, settlement_date, trade_date || null, settlement_amount, twd_amount || null, status, notes || null]
     );
 
-    // 如果狀態為「已交割」，自動產生對應的銀行明細並更新銀行餘額
-    if (status === '已交割') {
+    // 如果狀態為「已交割」，自動產生對應的銀行明細並更新銀行餘額（導入時跳過，因為銀行明細已經存在）
+    if (status === '已交割' && !skipAutoBankTransaction) {
       const run = promisify(db.run.bind(db)) as (sql: string, params?: any[]) => Promise<void>;
       const get = promisify(db.get.bind(db)) as (sql: string, params: any[]) => Promise<any>;
       const all = promisify(db.all.bind(db)) as (sql: string, params: any[]) => Promise<any[]>;
@@ -134,44 +135,10 @@ router.post('/', async (req: AuthRequest, res) => {
         }
       }
 
-      // 如果沒有交易記錄，使用原有的合併方式
+      // 如果沒有交易記錄，跳過（不創建銀行明細，因為無法獲取股票名稱）
       if (transactions.length === 0) {
-        const deposit =
-          typeof settlement_amount === 'number' && settlement_amount < 0
-            ? Math.abs(settlement_amount)
-            : 0;
-        const withdrawal =
-          typeof settlement_amount === 'number' && settlement_amount > 0
-            ? settlement_amount
-            : 0;
-
-        const description = `交割自動入帳-${newSettlementId}`;
-
-        await run(
-          `INSERT INTO bank_transactions (user_id, bank_account_id, transaction_date, description, deposit_amount, withdrawal_amount)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [
-            req.userId,
-            bank_account_id,
-            settlement_date,
-            description,
-            deposit,
-            withdrawal,
-          ]
-        );
-
-        const account: any = await get(
-          'SELECT balance FROM bank_accounts WHERE id = ? AND user_id = ?',
-          [bank_account_id, req.userId]
-        );
-
-        if (account) {
-          const newBalance = (account.balance || 0) + deposit - withdrawal;
-          await run(
-            'UPDATE bank_accounts SET balance = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?',
-            [newBalance, bank_account_id, req.userId]
-          );
-        }
+        // 不創建銀行明細，因為沒有交易記錄無法獲取股票名稱
+        console.warn(`交割記錄 ${newSettlementId} 沒有關聯的交易記錄，跳過自動創建銀行明細`);
       } else {
         // 為每筆交易創建單獨的銀行明細
         let totalDeposit = 0;
@@ -374,42 +341,10 @@ router.put('/:id', async (req: AuthRequest, res) => {
         }
       }
 
-      // 如果沒有交易記錄，使用原有的合併方式
+      // 如果沒有交易記錄，跳過（不創建銀行明細，因為無法獲取股票名稱）
       if (transactions.length === 0) {
-        const deposit =
-          typeof settlement_amount === 'number' && settlement_amount < 0
-            ? Math.abs(settlement_amount)
-            : 0;
-        const withdrawal =
-          typeof settlement_amount === 'number' && settlement_amount > 0
-            ? settlement_amount
-            : 0;
-
-        await run(
-          `INSERT INTO bank_transactions (user_id, bank_account_id, transaction_date, description, deposit_amount, withdrawal_amount)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [
-            req.userId,
-            bank_account_id,
-            settlement_date,
-            autoDescription,
-            deposit,
-            withdrawal,
-          ]
-        );
-
-        // 更新銀行帳戶餘額
-        const newAccount: any = await get(
-          'SELECT balance FROM bank_accounts WHERE id = ? AND user_id = ?',
-          [bank_account_id, req.userId]
-        );
-        if (newAccount) {
-          const newBalance = (newAccount.balance || 0) + deposit - withdrawal;
-          await run(
-            'UPDATE bank_accounts SET balance = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?',
-            [newBalance, bank_account_id, req.userId]
-          );
-        }
+        // 不創建銀行明細，因為沒有交易記錄無法獲取股票名稱
+        console.warn(`交割記錄 ${id} 更新後沒有關聯的交易記錄，跳過自動創建銀行明細`);
       } else {
         // 為每筆交易創建單獨的銀行明細
         let totalDeposit = 0;

@@ -66,6 +66,9 @@ const Settlements = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [selectedSettlementId, setSelectedSettlementId] = useState<number | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [modalPosition, setModalPosition] = useState({ x: 0, y: 0 });
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
   const [formData, setFormData] = useState({
     transaction_ids: [] as number[],
@@ -87,6 +90,31 @@ const Settlements = () => {
     fetchTransactions();
     fetchSettlements();
   }, [filters, currentPage, pageSize]);
+
+  // 拖動處理函數
+  const handleModalMouseDown = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('input, select, textarea, button')) {
+      return;
+    }
+    setDragging(true);
+    setDragStart({
+      x: e.clientX - modalPosition.x,
+      y: e.clientY - modalPosition.y,
+    });
+  };
+
+  const handleModalMouseMove = (e: React.MouseEvent) => {
+    if (dragging) {
+      setModalPosition({
+        x: e.clientX - dragStart.x,
+        y: e.clientY - dragStart.y,
+      });
+    }
+  };
+
+  const handleModalMouseUp = () => {
+    setDragging(false);
+  };
 
   // 當選擇關聯交易時，自動填入成交日期（使用第一個選擇的交易日期）
   useEffect(() => {
@@ -901,9 +929,22 @@ const Settlements = () => {
 
         {/* 新增/編輯模態框 */}
         {showModal && (
-          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-            <div className="relative top-20 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">
+          <div 
+            className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50"
+            onMouseMove={handleModalMouseMove}
+            onMouseUp={handleModalMouseUp}
+            onMouseLeave={handleModalMouseUp}
+          >
+            <div 
+              className="relative mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white"
+              style={{
+                marginTop: `${Math.max(20, modalPosition.y)}px`,
+                marginLeft: `${modalPosition.x}px`,
+                transform: 'translateX(-50%)',
+              }}
+              onMouseDown={handleModalMouseDown}
+            >
+              <h3 className="text-lg font-bold text-gray-900 mb-4 cursor-move">
                 {editingSettlement ? '編輯交割記錄' : '新增交割記錄'}
               </h3>
               <form onSubmit={handleSubmit} className="space-y-4">

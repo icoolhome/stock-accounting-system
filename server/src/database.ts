@@ -347,6 +347,16 @@ export const initDatabase = async (): Promise<void> => {
     }
   }
 
+  // 遷移現有 bank_accounts 表：添加 available_balance 字段
+  try {
+    await runNoParams(`ALTER TABLE bank_accounts ADD COLUMN available_balance REAL DEFAULT 0`);
+  } catch (e: any) {
+    // 如果字段已存在則忽略錯誤
+    if (!e.message.includes('duplicate column')) {
+      console.log('添加 available_balance 字段時發生錯誤（可能已存在）:', e.message);
+    }
+  }
+
   // 將現有的 transaction_id 遷移到 transaction_ids（只遷移一次）
   try {
     // 使用導出的 all 和 run 函數（在文件末尾定義，但可以在這裡使用）

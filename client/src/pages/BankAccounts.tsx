@@ -26,6 +26,7 @@ interface BankAccount {
   account_number: string;
   account_type: string;
   balance: number;
+  available_balance?: number;
   currency: string;
 }
 
@@ -70,6 +71,12 @@ const BankAccounts = () => {
     quickRange: '',
   });
   const [expandedTransactionId, setExpandedTransactionId] = useState<number | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [modalPosition, setModalPosition] = useState({ x: 0, y: 0 });
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [draggingTransaction, setDraggingTransaction] = useState(false);
+  const [transactionModalPosition, setTransactionModalPosition] = useState({ x: 0, y: 0 });
+  const [dragStartTransaction, setDragStartTransaction] = useState({ x: 0, y: 0 });
 
   const [formData, setFormData] = useState({
     securities_account_id: '',
@@ -204,6 +211,56 @@ const BankAccounts = () => {
     fetchBankTransactions();
     fetchCurrencies();
   }, [currentPage, pageSize, transactionCurrentPage, transactionPageSize, transactionFilters]);
+
+  // 拖動處理函數（銀行帳戶modal）
+  const handleModalMouseDown = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('input, select, textarea, button')) {
+      return;
+    }
+    setDragging(true);
+    setDragStart({
+      x: e.clientX - modalPosition.x,
+      y: e.clientY - modalPosition.y,
+    });
+  };
+
+  const handleModalMouseMove = (e: React.MouseEvent) => {
+    if (dragging) {
+      setModalPosition({
+        x: e.clientX - dragStart.x,
+        y: e.clientY - dragStart.y,
+      });
+    }
+  };
+
+  const handleModalMouseUp = () => {
+    setDragging(false);
+  };
+
+  // 拖動處理函數（銀行明細modal）
+  const handleTransactionModalMouseDown = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('input, select, textarea, button')) {
+      return;
+    }
+    setDraggingTransaction(true);
+    setDragStartTransaction({
+      x: e.clientX - transactionModalPosition.x,
+      y: e.clientY - transactionModalPosition.y,
+    });
+  };
+
+  const handleTransactionModalMouseMove = (e: React.MouseEvent) => {
+    if (draggingTransaction) {
+      setTransactionModalPosition({
+        x: e.clientX - dragStartTransaction.x,
+        y: e.clientY - dragStartTransaction.y,
+      });
+    }
+  };
+
+  const handleTransactionModalMouseUp = () => {
+    setDraggingTransaction(false);
+  };
 
   // 獲取幣別設定
   const fetchCurrencies = async () => {
@@ -491,6 +548,7 @@ const BankAccounts = () => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">證券帳號</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">帳戶類型</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">銀行餘額</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">可用餘額</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">幣別</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">操作</th>
                   </tr>
@@ -520,6 +578,11 @@ const BankAccounts = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         ${account.balance.toFixed(2)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {account.available_balance !== null && account.available_balance !== undefined
+                          ? `$${(account.available_balance || 0).toFixed(2)}` 
+                          : '-'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {account.currency}
@@ -751,11 +814,18 @@ const BankAccounts = () => {
                           {transaction.transaction_category || '-'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          {transaction.deposit_amount > 0 ? (
-                            <span className="text-gray-900">${transaction.deposit_amount.toFixed(2)}</span>
-                          ) : transaction.withdrawal_amount > 0 ? (
-                            <span className="text-green-600">${transaction.withdrawal_amount.toFixed(2)}</span>
-                          ) : '-'}
+                          {(() => {
+                            const amount = (transaction.deposit_amount || 0) - (transaction.withdrawal_amount || 0);
+                            if (amount === 0) return '-';
+                            // 存入（正數）顯示藍色，支出（負數）顯示綠色
+                            if (amount > 0) {
+                              // 存入（正數）→ 顯示為正數（藍色）
+                              return <span className="text-blue-600">${amount.toFixed(2)}</span>;
+                            } else {
+                              // 支出（負數）→ 顯示為負數（綠色）
+                              return <span className="text-green-600">-${Math.abs(amount).toFixed(2)}</span>;
+                            }
+                          })()}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
                           <button
@@ -861,9 +931,22 @@ const BankAccounts = () => {
 
         {/* 新增/編輯銀行明細模態框 */}
         {showTransactionModal && (
-          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-            <div className="relative top-20 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">
+          <div 
+            className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50"
+            onMouseMove={handleTransactionModalMouseMove}
+            onMouseUp={handleTransactionModalMouseUp}
+            onMouseLeave={handleTransactionModalMouseUp}
+          >
+            <div 
+              className="relative mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white"
+              style={{
+                marginTop: `${Math.max(20, transactionModalPosition.y)}px`,
+                marginLeft: `${transactionModalPosition.x}px`,
+                transform: 'translateX(-50%)',
+              }}
+              onMouseDown={handleTransactionModalMouseDown}
+            >
+              <h3 className="text-lg font-bold text-gray-900 mb-4 cursor-move">
                 {editingTransaction ? '編輯銀行明細' : '新增銀行明細'}
               </h3>
               <form onSubmit={handleTransactionSubmit} className="space-y-4">
@@ -991,7 +1074,7 @@ const BankAccounts = () => {
                     </div>
                   </div>
                   <div className="col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">存入/支出 *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">存入/支出（正數為存入，負數為支出）*</label>
                     <input
                       type="number"
                       step="0.01"
@@ -1001,10 +1084,14 @@ const BankAccounts = () => {
                         const val = e.target.value;
                         setTransactionFormData({ ...transactionFormData, amount: val === '' ? '' as number | '' : (parseFloat(val) || '' as number | '') });
                       }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      placeholder="正數為存入，負數為支出（例：1000 或 -500）"
+                      className={`w-full px-3 py-2 border border-gray-300 rounded-md ${
+                        transactionFormData.amount !== '' && transactionFormData.amount !== 0
+                          ? (transactionFormData.amount > 0 ? 'text-blue-600' : 'text-green-600')
+                          : ''
+                      }`}
+                      placeholder="例：1000（存入）或 -500（支出）"
                     />
-                    <p className="mt-1 text-xs text-gray-500">提示：輸入正數表示存入，輸入負數表示支出</p>
+                    <p className="mt-1 text-xs text-gray-500">正數表示存入（藍色），負數表示支出（綠色）</p>
                   </div>
                 </div>
                 <div className="flex justify-end space-x-2 pt-4">
@@ -1033,9 +1120,22 @@ const BankAccounts = () => {
 
         {/* 新增/編輯模態框 */}
         {showModal && (
-          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-            <div className="relative top-20 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">
+          <div 
+            className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50"
+            onMouseMove={handleModalMouseMove}
+            onMouseUp={handleModalMouseUp}
+            onMouseLeave={handleModalMouseUp}
+          >
+            <div 
+              className="relative mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white"
+              style={{
+                marginTop: `${Math.max(20, modalPosition.y)}px`,
+                marginLeft: `${modalPosition.x}px`,
+                transform: 'translateX(-50%)',
+              }}
+              onMouseDown={handleModalMouseDown}
+            >
+              <h3 className="text-lg font-bold text-gray-900 mb-4 cursor-move">
                 {editingAccount ? '編輯銀行帳戶' : '新增銀行帳戶'}
               </h3>
               <form onSubmit={handleSubmit} className="space-y-4">

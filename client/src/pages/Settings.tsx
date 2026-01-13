@@ -19,6 +19,7 @@ const Settings = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [importProgress, setImportProgress] = useState<string>('');
 
   // API設定
   const [apiSettings, setApiSettings] = useState({
@@ -220,6 +221,10 @@ const Settings = () => {
       const dividendsResponse = await axios.get('/api/dividends');
       const dividends = dividendsResponse.data.data || [];
       
+      // 獲取銀行交易記錄
+      const bankTransactionsResponse = await axios.get('/api/bank-transactions');
+      const bankTransactions = bankTransactionsResponse.data.data || [];
+      
       // 獲取庫存管理（計算結果）
       const holdingsResponse = await axios.get('/api/holdings');
       const holdings = holdingsResponse.data.data || [];
@@ -257,6 +262,7 @@ const Settings = () => {
           currency: account.currency,
         })),
         transactions: transactions.map((txn: any) => ({
+          id: txn.id, // 保存交易記錄ID，用於導入時的ID映射
           securities_account_name: txn.account_name,
           securities_account_broker: txn.broker_name,
           trade_date: txn.trade_date,
@@ -326,13 +332,24 @@ const Settings = () => {
           profit_loss_percent: holding.profit_loss_percent,
           currency: holding.currency,
         })),
+        bankTransactions: bankTransactions.map((transaction: any) => ({
+          bank_name: transaction.bank_name,
+          bank_account_number: transaction.account_number,
+          transaction_date: transaction.transaction_date,
+          description: transaction.description,
+          transaction_category: transaction.transaction_category,
+          deposit_amount: transaction.deposit_amount,
+          withdrawal_amount: transaction.withdrawal_amount,
+        })),
       };
       
-      // 轉換為JSON字符串
+      // 轉換為JSON字符串（確保UTF-8編碼）
       const jsonStr = JSON.stringify(exportData, null, 2);
       
-      // 創建Blob並下載
-      const blob = new Blob([jsonStr], { type: 'application/json' });
+      // 創建Blob並下載（明確指定UTF-8編碼）
+      // 注意：Blob 會自動使用 UTF-8 編碼，但我們可以添加 BOM 以確保兼容性
+      const BOM = '\uFEFF';
+      const blob = new Blob([BOM + jsonStr], { type: 'application/json;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -361,10 +378,12 @@ const Settings = () => {
     }
 
     setSelectedFileName(file.name);
+    setImportProgress('準備導入...');
 
     try {
       setLoading(true);
       setError('');
+      setSuccess('');
       
       // 確認操作
       const confirmed = window.confirm(
@@ -373,19 +392,78 @@ const Settings = () => {
       if (!confirmed) {
         e.target.value = ''; // 重置文件輸入
         setSelectedFileName('');
+        setImportProgress('');
+        setLoading(false);
         return;
       }
+      
+      setImportProgress('正在讀取檔案...');
 
-      // 讀取文件
-      const text = await file.text();
-      const importData = JSON.parse(text);
+      // 讀取文件（處理編碼問題）
+      setImportProgress('正在讀取檔案內容...');
+      let text: string;
+      try {
+        // 使用 FileReader 來更好地處理編碼
+        text = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            try {
+              let content = e.target?.result as string;
+              // 移除 UTF-8 BOM（如果存在）
+              if (content.charCodeAt(0) === 0xFEFF) {
+                content = content.slice(1);
+              }
+              resolve(content);
+            } catch (err) {
+              reject(err);
+            }
+          };
+          reader.onerror = () => reject(new Error('檔案讀取失敗'));
+          // 明確指定 UTF-8 編碼
+          reader.readAsText(file, 'UTF-8');
+        });
+      } catch (readError: any) {
+        console.error('檔案讀取失敗:', readError);
+        throw new Error(`檔案讀取失敗：${readError.message}`);
+      }
+      
+      let importData;
+      try {
+        setImportProgress('正在解析JSON格式...');
+        // 移除可能的 BOM 和空白字符
+        const cleanedText = text.trim().replace(/^\uFEFF/, '');
+        importData = JSON.parse(cleanedText);
+        console.log('檔案解析成功，數據結構:', Object.keys(importData));
+        console.log('檔案編碼檢查: UTF-8, 長度:', cleanedText.length);
+      } catch (parseError: any) {
+        console.error('JSON 解析失敗:', parseError);
+        console.error('檔案前100個字符:', text.substring(0, 100));
+        throw new Error(`檔案格式錯誤：無法解析 JSON 格式。錯誤：${parseError.message}`);
+      }
 
       // 驗證數據格式
       if (!importData.settings) {
-        throw new Error('檔案格式不正確');
+        console.error('檔案缺少 settings 字段:', importData);
+        throw new Error('檔案格式不正確：缺少 settings 字段');
       }
 
+      // 記錄導入數據統計
+      console.log('準備導入數據:');
+      console.log('- 設定:', importData.settings ? '有' : '無');
+      console.log('- 幣別:', importData.currencies?.length || 0, '筆');
+      console.log('- 股票資料:', importData.stockData?.length || 0, '筆');
+      console.log('- 證券帳戶:', importData.securitiesAccounts?.length || 0, '筆');
+      console.log('- 銀行帳戶:', importData.bankAccounts?.length || 0, '筆');
+      console.log('- 交易記錄:', importData.transactions?.length || 0, '筆');
+      console.log('- 交割記錄:', importData.settlements?.length || 0, '筆');
+      console.log('- 歷史收益:', importData.dividends?.length || 0, '筆');
+      console.log('- 銀行交易記錄:', importData.bankTransactions?.length || 0, '筆');
+      
+      // 顯示導入進度
+      setImportProgress('開始導入數據...');
+
       // 載入設定
+      setImportProgress('正在導入系統設定...');
       if (importData.settings.apiSettings) {
         await saveSettings('apiSettings', importData.settings.apiSettings);
         setApiSettings(importData.settings.apiSettings);
@@ -404,41 +482,78 @@ const Settings = () => {
       }
 
       // 載入幣別設定
+      setImportProgress('正在導入幣別設定...');
+      const currencyStats = { success: 0, failed: 0, skipped: 0 };
       if (importData.currencies && Array.isArray(importData.currencies)) {
-        // 先刪除現有幣別（可選，這裡先保留現有，只添加新的）
-        // 然後添加導入的幣別
+        console.log(`開始導入幣別設定，共 ${importData.currencies.length} 筆`);
         for (const currency of importData.currencies) {
           try {
             await axios.post('/api/settings/currencies', currency);
+            currencyStats.success++;
           } catch (err: any) {
-            // 如果已存在，忽略錯誤
-            console.warn('幣別已存在，跳過:', currency.currency_code);
+            // 如果已存在，跳過（不計為失敗）
+            if (err.response?.status === 400 || err.response?.data?.message?.includes('已存在')) {
+              currencyStats.skipped++;
+              console.warn('幣別已存在，跳過:', currency.currency_code);
+            } else {
+              currencyStats.failed++;
+              console.warn('幣別導入失敗:', currency.currency_code, err.response?.data?.message || err.message);
+            }
           }
         }
         await fetchCurrencies();
+        console.log(`幣別導入完成: 成功 ${currencyStats.success} 筆, 跳過 ${currencyStats.skipped} 筆, 失敗 ${currencyStats.failed} 筆`);
       }
 
       // 載入股票資料
+      setImportProgress('正在導入股票資料...');
+      const stockStats = { success: 0, failed: 0, skipped: 0 };
       if (importData.stockData && Array.isArray(importData.stockData)) {
+        console.log(`開始導入股票資料，共 ${importData.stockData.length} 筆`);
         // 批量導入股票資料
         for (const stock of importData.stockData) {
           try {
+            // 清理數據：將空字符串或只包含空格的字符串轉換為 null（除了 stock_name 必須有值）
+            const cleanString = (str: any) => {
+              if (str === null || str === undefined) return null;
+              const trimmed = String(str).trim();
+              return trimmed === '' ? null : trimmed;
+            };
+
+            // 驗證必填字段
+            if (!stock.stock_code || !stock.stock_code.trim()) {
+              stockStats.skipped++;
+              console.warn('股票資料導入失敗: 股票代碼為空');
+              continue;
+            }
+
+            const cleanedStockName = cleanString(stock.stock_name);
+            if (!cleanedStockName) {
+              stockStats.skipped++;
+              console.warn('股票資料導入失敗: 股票名稱為空，跳過:', stock.stock_code);
+              continue;
+            }
+
             // 使用PUT方法來更新或插入股票資料
             await axios.put('/api/stocks', {
-              stock_code: stock.stock_code,
-              stock_name: stock.stock_name,
-              market_type: stock.market_type || null,
-              etf_type: stock.etf_type || null,
-              industry: stock.industry || null,
+              stock_code: stock.stock_code.trim(),
+              stock_name: cleanedStockName,
+              market_type: cleanString(stock.market_type),
+              etf_type: cleanString(stock.etf_type),
+              industry: cleanString(stock.industry),
             });
+            stockStats.success++;
           } catch (err: any) {
             // 如果失敗，記錄錯誤但繼續處理
+            stockStats.failed++;
             console.warn('股票資料導入失敗:', stock.stock_code, err.response?.data?.message || err.message);
           }
         }
+        console.log(`股票資料導入完成: 成功 ${stockStats.success} 筆, 跳過 ${stockStats.skipped} 筆, 失敗 ${stockStats.failed} 筆`);
       }
 
       // 載入證券帳戶（建立ID映射）
+      setImportProgress('正在導入證券帳戶...');
       // 先獲取現有證券帳戶（只獲取一次，提高效率）
       let existingAccountsResponse = await axios.get('/api/securities-accounts');
       let existingAccounts = existingAccountsResponse.data.data || [];
@@ -450,14 +565,16 @@ const Settings = () => {
       });
 
       const securitiesAccountMap = new Map<string, number>(); // key: account_name|broker_name|account_number, value: new ID
+      const securitiesAccountStats = { success: 0, failed: 0, skipped: 0 };
       if (importData.securitiesAccounts && Array.isArray(importData.securitiesAccounts)) {
-
+        console.log(`開始導入證券帳戶，共 ${importData.securitiesAccounts.length} 筆`);
         // 導入證券帳戶
         for (const account of importData.securitiesAccounts) {
           const key = `${account.account_name}|${account.broker_name}|${account.account_number}`;
           // 檢查是否已存在
           if (existingAccountMap.has(key)) {
             securitiesAccountMap.set(key, existingAccountMap.get(key)!);
+            securitiesAccountStats.skipped++;
           } else {
             try {
               const response = await axios.post('/api/securities-accounts', {
@@ -468,17 +585,23 @@ const Settings = () => {
               const newId = response.data.data?.id;
               if (newId) {
                 securitiesAccountMap.set(key, newId);
+                securitiesAccountStats.success++;
                 // 更新allSecuritiesAccounts列表
                 allSecuritiesAccounts = [...allSecuritiesAccounts, { id: newId, account_name: account.account_name, broker_name: account.broker_name, account_number: account.account_number }];
+              } else {
+                securitiesAccountStats.failed++;
               }
             } catch (err: any) {
+              securitiesAccountStats.failed++;
               console.warn('證券帳戶導入失敗:', account.account_name, err.response?.data?.message || err.message);
             }
           }
         }
+        console.log(`證券帳戶導入完成: 成功 ${securitiesAccountStats.success} 筆, 跳過 ${securitiesAccountStats.skipped} 筆, 失敗 ${securitiesAccountStats.failed} 筆`);
       }
 
       // 載入銀行帳戶（需要使用證券帳戶ID映射）
+      setImportProgress('正在導入銀行帳戶...');
       // 先獲取現有銀行帳戶（只獲取一次，提高效率）
       let existingBankAccountsResponse = await axios.get('/api/bank-accounts');
       let existingBankAccounts = existingBankAccountsResponse.data.data || [];
@@ -490,13 +613,16 @@ const Settings = () => {
       });
 
       const bankAccountMap = new Map<string, number>(); // key: bank_name|account_number, value: new ID
+      const bankAccountStats = { success: 0, failed: 0, skipped: 0 };
       if (importData.bankAccounts && Array.isArray(importData.bankAccounts)) {
+        console.log(`開始導入銀行帳戶，共 ${importData.bankAccounts.length} 筆`);
         // 導入銀行帳戶
         for (const account of importData.bankAccounts) {
           const key = `${account.bank_name}|${account.account_number}`;
           // 檢查是否已存在
           if (existingBankAccountMap.has(key)) {
             bankAccountMap.set(key, existingBankAccountMap.get(key)!);
+            bankAccountStats.skipped++;
           } else {
             try {
               let securitiesAccountId = null;
@@ -522,21 +648,29 @@ const Settings = () => {
               const newId = response.data.data?.id;
               if (newId) {
                 bankAccountMap.set(key, newId);
+                bankAccountStats.success++;
                 // 更新allBankAccounts列表
                 allBankAccounts = [...allBankAccounts, { id: newId, bank_name: account.bank_name, account_number: account.account_number }];
+              } else {
+                bankAccountStats.failed++;
               }
             } catch (err: any) {
+              bankAccountStats.failed++;
               console.warn('銀行帳戶導入失敗:', account.bank_name, err.response?.data?.message || err.message);
             }
           }
         }
+        console.log(`銀行帳戶導入完成: 成功 ${bankAccountStats.success} 筆, 跳過 ${bankAccountStats.skipped} 筆, 失敗 ${bankAccountStats.failed} 筆`);
       }
 
       // 載入交易記錄（需要使用證券帳戶ID映射）
+      setImportProgress('正在導入交易記錄...');
       // 如果之前沒有導入證券帳戶，需要重新獲取（但通常不需要，因為上面已經有了）
 
-      const transactionMap = new Map<number, number>(); // key: old index, value: new ID
+      const transactionMap = new Map<number, number>(); // key: old ID, value: new ID
+      const transactionStats = { success: 0, failed: 0, errors: [] as string[] };
       if (importData.transactions && Array.isArray(importData.transactions)) {
+        console.log(`開始導入交易記錄，共 ${importData.transactions.length} 筆`);
         for (let i = 0; i < importData.transactions.length; i++) {
           const txn = importData.transactions[i];
           try {
@@ -579,16 +713,33 @@ const Settings = () => {
             });
             const newId = response.data.data?.id;
             if (newId) {
-              transactionMap.set(i, newId);
+              // 如果有舊ID，使用舊ID作為key；否則使用索引作為key（向後兼容）
+              const oldId = txn.id;
+              if (oldId) {
+                transactionMap.set(oldId, newId);
+              } else {
+                transactionMap.set(i, newId); // 向後兼容：如果沒有舊ID，使用索引
+              }
+              transactionStats.success++;
+            } else {
+              transactionStats.failed++;
+              transactionStats.errors.push(`交易記錄 ${txn.stock_code} (${txn.trade_date}): 未返回ID`);
             }
           } catch (err: any) {
-            console.warn('交易記錄導入失敗:', txn.stock_code, err.response?.data?.message || err.message);
+            transactionStats.failed++;
+            const errorMsg = `${txn.stock_code || '未知'} (${txn.trade_date || '未知日期'}): ${err.response?.data?.message || err.message}`;
+            transactionStats.errors.push(errorMsg);
+            console.warn('交易記錄導入失敗:', errorMsg);
           }
         }
+        console.log(`交易記錄導入完成: 成功 ${transactionStats.success} 筆, 失敗 ${transactionStats.failed} 筆`);
       }
 
       // 載入交割記錄（需要使用銀行帳戶和交易記錄ID映射）
+      setImportProgress('正在導入交割記錄...');
+      const settlementStats = { success: 0, failed: 0 };
       if (importData.settlements && Array.isArray(importData.settlements)) {
+        console.log(`開始導入交割記錄，共 ${importData.settlements.length} 筆`);
         for (const settlement of importData.settlements) {
           try {
             // 查找對應的銀行帳戶ID（使用已經獲取的銀行帳戶列表）
@@ -608,18 +759,28 @@ const Settings = () => {
               }
             }
 
-            // 處理transaction_ids（如果有）
+            // 處理transaction_ids（如果有）- 使用ID映射將舊ID轉換為新ID
             let transactionIds: number[] | null = null;
             if (settlement.transaction_ids) {
               try {
-                // 注意：由於ID映射複雜，這裡簡化處理，只導入settlement本身
-                // 實際使用中，transaction_ids可能無法完全匹配
-                transactionIds = typeof settlement.transaction_ids === 'string' 
+                const oldIds = typeof settlement.transaction_ids === 'string' 
                   ? JSON.parse(settlement.transaction_ids) 
                   : settlement.transaction_ids;
-                // const oldIds = transactionIds; // 保留備用
+                
+                if (Array.isArray(oldIds) && oldIds.length > 0) {
+                  // 將舊ID映射為新ID
+                  const mappedIds = oldIds
+                    .map((oldId: number) => transactionMap.get(oldId))
+                    .filter((newId: number | undefined): newId is number => newId !== undefined);
+                  
+                  if (mappedIds.length > 0) {
+                    transactionIds = mappedIds;
+                  } else {
+                    console.warn(`交割記錄 ${settlement.settlement_date} 的 transaction_ids 無法映射到新的交易記錄ID`);
+                  }
+                }
               } catch (e) {
-                // 忽略解析錯誤
+                console.warn('解析交割記錄 transaction_ids 失敗:', e);
               }
             }
 
@@ -632,15 +793,22 @@ const Settings = () => {
               twd_amount: settlement.twd_amount,
               status: settlement.status || '未交割',
               notes: settlement.notes || null,
+              skipAutoBankTransaction: true, // 導入時跳過自動創建銀行明細，因為銀行明細已經存在
             });
+            settlementStats.success++;
           } catch (err: any) {
+            settlementStats.failed++;
             console.warn('交割記錄導入失敗:', settlement.settlement_date, err.response?.data?.message || err.message);
           }
         }
+        console.log(`交割記錄導入完成: 成功 ${settlementStats.success} 筆, 失敗 ${settlementStats.failed} 筆`);
       }
 
       // 載入歷史收益（無關聯，可以直接導入）
+      setImportProgress('正在導入歷史收益...');
+      const dividendStats = { success: 0, failed: 0 };
       if (importData.dividends && Array.isArray(importData.dividends)) {
+        console.log(`開始導入歷史收益，共 ${importData.dividends.length} 筆`);
         for (const dividend of importData.dividends) {
           try {
             await axios.post('/api/dividends', {
@@ -656,20 +824,203 @@ const Settings = () => {
               source: dividend.source || null,
               description: dividend.description || null,
             });
+            dividendStats.success++;
           } catch (err: any) {
+            dividendStats.failed++;
             console.warn('歷史收益導入失敗:', dividend.stock_code, err.response?.data?.message || err.message);
           }
         }
+        console.log(`歷史收益導入完成: 成功 ${dividendStats.success} 筆, 失敗 ${dividendStats.failed} 筆`);
+      }
+
+      // 載入銀行交易記錄（需要使用銀行帳戶ID映射）
+      setImportProgress('正在導入銀行交易記錄...');
+      const bankTransactionStats = { success: 0, failed: 0 };
+      if (importData.bankTransactions && Array.isArray(importData.bankTransactions)) {
+        console.log(`開始導入銀行交易記錄，共 ${importData.bankTransactions.length} 筆`);
+        // 如果之前沒有導入銀行帳戶，需要重新獲取（但通常不需要，因為上面已經有了）
+        if (allBankAccounts.length === 0) {
+          const refreshBankAccountsResponse = await axios.get('/api/bank-accounts');
+          allBankAccounts = refreshBankAccountsResponse.data.data || [];
+        }
+        
+        for (const transaction of importData.bankTransactions) {
+          try {
+            // 查找對應的銀行帳戶ID
+            let bankAccountId = null;
+            if (transaction.bank_name && transaction.bank_account_number) {
+              const matchedAccount = allBankAccounts.find((acc: any) => 
+                acc.bank_name === transaction.bank_name && 
+                acc.account_number === transaction.bank_account_number
+              );
+              if (matchedAccount) {
+                bankAccountId = matchedAccount.id;
+              } else {
+                bankTransactionStats.failed++;
+                console.warn('銀行交易記錄導入失敗: 找不到對應的銀行帳戶', transaction.bank_name, transaction.bank_account_number);
+                continue;
+              }
+            } else {
+              bankTransactionStats.failed++;
+              console.warn('銀行交易記錄導入失敗: 缺少銀行帳戶信息');
+              continue;
+            }
+
+            await axios.post('/api/bank-transactions', {
+              bank_account_id: bankAccountId,
+              transaction_date: transaction.transaction_date,
+              description: transaction.description || null,
+              transaction_category: transaction.transaction_category || null,
+              deposit_amount: transaction.deposit_amount || 0,
+              withdrawal_amount: transaction.withdrawal_amount || 0,
+              skipBalanceUpdate: true, // 導入時跳過餘額更新，因為導入的餘額已經是最終餘額
+            });
+            bankTransactionStats.success++;
+          } catch (err: any) {
+            bankTransactionStats.failed++;
+            console.warn('銀行交易記錄導入失敗:', transaction.transaction_date, err.response?.data?.message || err.message);
+          }
+        }
+        console.log(`銀行交易記錄導入完成: 成功 ${bankTransactionStats.success} 筆, 失敗 ${bankTransactionStats.failed} 筆`);
       }
 
       // 注意：庫存管理（holdings）是計算結果，不需要導入
 
+      // 構建成功訊息（包含統計）
+      let successMessage = '完整備份檔案載入成功！\n';
+      let hasErrors = false;
+      
+      // 幣別統計
+      if (importData.currencies && Array.isArray(importData.currencies)) {
+        successMessage += `幣別: 成功 ${currencyStats.success} 筆`;
+        if (currencyStats.skipped > 0) successMessage += `, 跳過 ${currencyStats.skipped} 筆`;
+        if (currencyStats.failed > 0) {
+          hasErrors = true;
+          successMessage += `, 失敗 ${currencyStats.failed} 筆`;
+        }
+        successMessage += '\n';
+      }
+      
+      // 股票資料統計
+      if (importData.stockData && Array.isArray(importData.stockData)) {
+        successMessage += `股票資料: 成功 ${stockStats.success} 筆`;
+        if (stockStats.skipped > 0) successMessage += `, 跳過 ${stockStats.skipped} 筆`;
+        if (stockStats.failed > 0) {
+          hasErrors = true;
+          successMessage += `, 失敗 ${stockStats.failed} 筆`;
+        }
+        successMessage += '\n';
+      }
+      
+      // 證券帳戶統計
+      if (importData.securitiesAccounts && Array.isArray(importData.securitiesAccounts)) {
+        successMessage += `證券帳戶: 成功 ${securitiesAccountStats.success} 筆`;
+        if (securitiesAccountStats.skipped > 0) successMessage += `, 跳過 ${securitiesAccountStats.skipped} 筆`;
+        if (securitiesAccountStats.failed > 0) {
+          hasErrors = true;
+          successMessage += `, 失敗 ${securitiesAccountStats.failed} 筆`;
+        }
+        successMessage += '\n';
+      }
+      
+      // 銀行帳戶統計
+      if (importData.bankAccounts && Array.isArray(importData.bankAccounts)) {
+        successMessage += `銀行帳戶: 成功 ${bankAccountStats.success} 筆`;
+        if (bankAccountStats.skipped > 0) successMessage += `, 跳過 ${bankAccountStats.skipped} 筆`;
+        if (bankAccountStats.failed > 0) {
+          hasErrors = true;
+          successMessage += `, 失敗 ${bankAccountStats.failed} 筆`;
+        }
+        successMessage += '\n';
+      }
+      
+      // 交易記錄統計
+      if (importData.transactions && Array.isArray(importData.transactions)) {
+        successMessage += `交易記錄: 成功 ${transactionStats.success} 筆`;
+        if (transactionStats.failed > 0) {
+          hasErrors = true;
+          successMessage += `, 失敗 ${transactionStats.failed} 筆`;
+          if (transactionStats.errors.length > 0) {
+            console.error('導入錯誤詳情:', transactionStats.errors.slice(0, 10)); // 只顯示前10個錯誤
+            // 在控制台顯示詳細錯誤
+            transactionStats.errors.slice(0, 10).forEach((err, idx) => {
+              console.error(`錯誤 ${idx + 1}:`, err);
+            });
+          }
+        }
+        successMessage += '\n';
+      }
+      
+      // 交割記錄統計
+      if (importData.settlements && Array.isArray(importData.settlements)) {
+        successMessage += `交割記錄: 成功 ${settlementStats.success} 筆`;
+        if (settlementStats.failed > 0) {
+          hasErrors = true;
+          successMessage += `, 失敗 ${settlementStats.failed} 筆`;
+        }
+        successMessage += '\n';
+      }
+      
+      // 歷史收益統計
+      if (importData.dividends && Array.isArray(importData.dividends)) {
+        successMessage += `歷史收益: 成功 ${dividendStats.success} 筆`;
+        if (dividendStats.failed > 0) {
+          hasErrors = true;
+          successMessage += `, 失敗 ${dividendStats.failed} 筆`;
+        }
+        successMessage += '\n';
+      }
+      
+      // 銀行交易記錄統計
+      if (importData.bankTransactions && Array.isArray(importData.bankTransactions)) {
+        successMessage += `銀行交易記錄: 成功 ${bankTransactionStats.success} 筆`;
+        if (bankTransactionStats.failed > 0) {
+          hasErrors = true;
+          successMessage += `, 失敗 ${bankTransactionStats.failed} 筆`;
+        }
+        successMessage += '\n';
+      }
+      
+      if (hasErrors) {
+        successMessage += '\n⚠️ 部分數據導入失敗，請查看瀏覽器控制台（F12）了解詳情。';
+      }
+      
+      // 記錄導入完成
+      console.log('導入完成，完整統計:', {
+        currencies: currencyStats,
+        stockData: stockStats,
+        securitiesAccounts: securitiesAccountStats,
+        bankAccounts: bankAccountStats,
+        transactions: transactionStats,
+        settlements: settlementStats,
+        dividends: dividendStats,
+        bankTransactions: bankTransactionStats
+      });
+      
+      // 根據導入的數據類型，立即跳轉到對應頁面
+      let targetPage = '/transactions'; // 預設跳轉到交易記錄頁
+      if (transactionStats.success > 0) {
+        targetPage = '/transactions';
+      } else if (dividendStats.success > 0) {
+        targetPage = '/dividends';
+      } else if (bankAccountStats.success > 0) {
+        targetPage = '/bank-accounts';
+      } else if (settlementStats.success > 0) {
+        targetPage = '/settlements';
+      } else {
+        targetPage = '/'; // 儀表版
+      }
+      
+      // 導入完成，立即跳轉到數據頁面（使用 window.location.href 強制完全刷新）
       e.target.value = ''; // 重置文件輸入
       setSelectedFileName('');
-      setSuccess('完整備份檔案載入成功');
-      setTimeout(() => setSuccess(''), 3000);
+      setImportProgress('');
+      
+      // 直接跳轉，不等待，讓數據頁面自動載入最新數據（添加時間戳參數確保完全刷新）
+      window.location.href = targetPage + '?_t=' + Date.now();
     } catch (err: any) {
       setError(err.response?.data?.message || err.message || '載入設定檔案失敗');
+      setImportProgress('');
       setTimeout(() => setError(''), 3000);
       e.target.value = ''; // 重置文件輸入
       setSelectedFileName('');
@@ -983,7 +1334,31 @@ const Settings = () => {
 
         {success && (
           <div className="bg-green-50 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-            {success}
+            <pre className="whitespace-pre-wrap font-sans mb-3">{success}</pre>
+            {success.includes('完整備份檔案載入成功') && (
+              <div className="mt-3 pt-3 border-t border-green-300">
+                <p className="text-sm font-medium mb-2">快速查看導入的數據：</p>
+                <div className="flex flex-wrap gap-2">
+                  <Link to="/transactions" className="text-sm text-green-800 hover:text-green-900 underline">交易記錄</Link>
+                  <span className="text-green-600">|</span>
+                  <Link to="/bank-accounts" className="text-sm text-green-800 hover:text-green-900 underline">銀行帳戶</Link>
+                  <span className="text-green-600">|</span>
+                  <Link to="/dividends" className="text-sm text-green-800 hover:text-green-900 underline">歷史收益</Link>
+                  <span className="text-green-600">|</span>
+                  <Link to="/settlements" className="text-sm text-green-800 hover:text-green-900 underline">交割記錄</Link>
+                  <span className="text-green-600">|</span>
+                  <Link to="/holdings" className="text-sm text-green-800 hover:text-green-900 underline">庫存管理</Link>
+                  <span className="text-green-600">|</span>
+                  <Link to="/dashboard" className="text-sm text-green-800 hover:text-green-900 underline">儀表版</Link>
+                </div>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="mt-3 px-4 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700"
+                >
+                  刷新頁面以更新所有數據
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -1492,7 +1867,7 @@ const Settings = () => {
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
               <h3 className="text-sm font-medium text-blue-900 mb-2">檔案管理說明</h3>
               <p className="text-sm text-blue-700">
-                您可以在此導出完整系統備份（包含系統設定、證券帳戶、銀行帳戶、交易記錄、交割記錄、歷史收益、庫存管理等），或載入備份檔案以還原系統數據。
+                您可以在此導出完整系統備份（包含儀表版、使用指南、個股查詢、交易記錄、交割管理、銀行帳戶、庫存管理、投資組合、歷史收益、系統設定等），或載入備份檔案以還原系統數據。
               </p>
             </div>
 
@@ -1500,7 +1875,7 @@ const Settings = () => {
             <div className="border border-gray-200 rounded-lg p-4">
               <h3 className="text-lg font-semibold text-gray-900 mb-2">1. 導出存檔</h3>
               <p className="text-sm text-gray-600 mb-4">
-                導出完整系統備份（包含系統設定、幣別設定、交易記錄、證券帳戶、銀行帳戶、交割記錄、歷史收益、庫存管理等所有數據）
+                導出完整系統備份（包含儀表版、使用指南、個股查詢、交易記錄、交割管理、銀行帳戶、庫存管理、投資組合、歷史收益、系統設定等所有數據）
               </p>
               <button
                 onClick={handleExportSettings}
@@ -1515,8 +1890,20 @@ const Settings = () => {
             <div className="border border-gray-200 rounded-lg p-4">
               <h3 className="text-lg font-semibold text-gray-900 mb-2">2. 載入存檔(覆蓋)</h3>
               <p className="text-sm text-gray-600 mb-4">
-                從JSON檔案載入完整備份並還原所有數據（包含系統設定、幣別設定、交易記錄、證券帳戶、銀行帳戶、交割記錄、歷史收益等，此操作會添加數據到現有系統，請謹慎操作）
+                從JSON檔案載入完整備份並還原所有數據（包含儀表版、使用指南、個股查詢、交易記錄、交割管理、銀行帳戶、庫存管理、投資組合、歷史收益、系統設定等，此操作會添加數據到現有系統，請謹慎操作）
               </p>
+              {(importProgress || loading) && (
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                  <p className="text-sm text-blue-700 font-medium">
+                    {importProgress || (loading ? '正在處理...' : '')}
+                  </p>
+                  {loading && (
+                    <div className="mt-2 w-full bg-blue-200 rounded-full h-2">
+                      <div className="bg-blue-600 h-2 rounded-full animate-pulse" style={{ width: '60%' }}></div>
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="space-y-2">
                 <label className="block">
                   <input

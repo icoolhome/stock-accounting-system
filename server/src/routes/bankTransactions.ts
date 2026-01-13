@@ -77,7 +77,7 @@ router.get('/:id', async (req: AuthRequest, res) => {
 // 新增銀行明細
 router.post('/', async (req: AuthRequest, res) => {
   try {
-    const { bank_account_id, transaction_date, description, transaction_category, deposit_amount, withdrawal_amount } = req.body;
+    const { bank_account_id, transaction_date, description, transaction_category, deposit_amount, withdrawal_amount, skipBalanceUpdate } = req.body;
 
     if (!bank_account_id || !transaction_date) {
       return res.status(400).json({
@@ -105,18 +105,20 @@ router.post('/', async (req: AuthRequest, res) => {
       ]
     );
 
-    // 更新銀行帳戶餘額
-    const account: any = await get<any>(
-      'SELECT balance FROM bank_accounts WHERE id = ? AND user_id = ?',
-      [bank_account_id, req.userId]
-    );
-
-    if (account) {
-      const newBalance = (account.balance || 0) + deposit - withdrawal;
-      await run(
-        'UPDATE bank_accounts SET balance = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?',
-        [newBalance, bank_account_id, req.userId]
+    // 更新銀行帳戶餘額（導入時跳過，因為導入的餘額已經是最終餘額）
+    if (!skipBalanceUpdate) {
+      const account: any = await get<any>(
+        'SELECT balance FROM bank_accounts WHERE id = ? AND user_id = ?',
+        [bank_account_id, req.userId]
       );
+
+      if (account) {
+        const newBalance = (account.balance || 0) + deposit - withdrawal;
+        await run(
+          'UPDATE bank_accounts SET balance = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?',
+          [newBalance, bank_account_id, req.userId]
+        );
+      }
     }
 
     res.json({

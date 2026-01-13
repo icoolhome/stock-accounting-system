@@ -104,12 +104,44 @@ const fetchRealtimePricesFromMis = async (
     arr.forEach((item) => {
       const code: string = item.c;
       if (!code) return;
-      // z: 即時成交價，y: 昨收
-      const raw = (item.z && item.z !== '-' ? item.z : item.y) as string;
-      if (!raw) return;
+      
+      // 調試：記錄0050的原始數據
+      if (code === '0050' || code.includes('0050')) {
+        console.log(`[TWSE MIS API] 0050 原始數據:`, JSON.stringify(item, null, 2));
+      }
+      
+      // 優先順序：z (即時成交價) > tv (即時成交量對應價格) > y (昨收)
+      // 如果 z 為 '-' 或空，嘗試其他字段
+      let raw: string | null = null;
+      if (item.z && item.z !== '-' && item.z !== '') {
+        raw = item.z;
+      } else if (item.tv && item.tv !== '-' && item.tv !== '') {
+        raw = item.tv;
+      } else if (item.y && item.y !== '-' && item.y !== '') {
+        raw = item.y;
+      }
+      
+      if (!raw) {
+        // 調試：記錄未獲取到價格的情況
+        if (code === '0050' || code.includes('0050')) {
+          console.log(`[TWSE MIS API] 0050 未獲取到價格，可用字段: z=${item.z}, tv=${item.tv}, y=${item.y}`);
+        }
+        return;
+      }
+      
       const num = parseFloat(String(raw).replace(/,/g, ''));
       if (!isNaN(num) && num > 0) {
         result.set(code, num);
+        
+        // 調試：記錄0050的價格
+        if (code === '0050' || code.includes('0050')) {
+          console.log(`[TWSE MIS API] 0050 價格解析成功: ${raw} -> ${num}`);
+        }
+      } else {
+        // 調試：記錄解析失敗的情況
+        if (code === '0050' || code.includes('0050')) {
+          console.log(`[TWSE MIS API] 0050 價格解析失敗: raw=${raw}, num=${num}`);
+        }
       }
     });
   } catch (err: any) {
@@ -230,16 +262,47 @@ const fetchClosePricesFromOpenAPI = async (
       });
 
       if (stock) {
-        // 優先使用收盤價
-        const closePrice = stock.Close || stock.close || stock.收盤價;
-        if (closePrice && !isNaN(parseFloat(closePrice))) {
-          result.set(code, parseFloat(closePrice));
+        // 調試：記錄0050的原始數據
+        if (code === '0050' || code.includes('0050')) {
+          console.log(`[TWSE OpenAPI] 0050 原始數據:`, JSON.stringify(stock, null, 2));
+        }
+        
+        // 優先使用最後成交價（Z字段），因為這是最新的價格
+        // 如果最後成交價不可用，再使用收盤價
+        const lastPrice = stock.Z || stock.z || stock.最後成交價;
+        if (lastPrice && !isNaN(parseFloat(lastPrice))) {
+          const price = parseFloat(lastPrice);
+          result.set(code, price);
+          
+          // 調試：記錄0050的價格
+          if (code === '0050' || code.includes('0050')) {
+            console.log(`[TWSE OpenAPI] 0050 使用最後成交價: ${lastPrice} -> ${price}`);
+          }
           return;
         }
-        // 如果收盤價不可用，使用最後成交價
-        const lastPrice = stock.Z || stock.z || stock.最後成交價 || stock.Price || stock.price;
-        if (lastPrice && !isNaN(parseFloat(lastPrice))) {
-          result.set(code, parseFloat(lastPrice));
+        
+        // 如果最後成交價不可用，使用收盤價
+        const closePrice = stock.Close || stock.close || stock.收盤價;
+        if (closePrice && !isNaN(parseFloat(closePrice))) {
+          const price = parseFloat(closePrice);
+          result.set(code, price);
+          
+          // 調試：記錄0050的價格
+          if (code === '0050' || code.includes('0050')) {
+            console.log(`[TWSE OpenAPI] 0050 使用收盤價: ${closePrice} -> ${price}`);
+          }
+          return;
+        }
+        
+        // 如果都不可用，嘗試其他字段
+        const otherPrice = stock.Price || stock.price;
+        if (otherPrice && !isNaN(parseFloat(otherPrice))) {
+          result.set(code, parseFloat(otherPrice));
+        }
+      } else {
+        // 調試：記錄未找到股票的情況
+        if (code === '0050' || code.includes('0050')) {
+          console.log(`[TWSE OpenAPI] 0050 未找到股票數據`);
         }
       }
     });
@@ -254,26 +317,36 @@ const fetchStockPricesBatch = async (
   stockCodes: string[],
   marketTypes: string[],
   etfFlagsByCode: Map<string, boolean>,
-  priceSource?: string // 'auto' | 'twse_stock_day_all' | 'twse_mi_index' | 'tpex' | 'realtime'
+  priceSource?: string, // 'auto' | 'twse_stock_day_all' | 'twse_mi_index' | 'tpex' | 'realtime'
+  forceRefresh?: boolean // 強制刷新，忽略緩存
 ): Promise<Map<string, { price: number; source: string; updatedAt: number }>> => {
   const priceMap = new Map<string, { price: number; source: string; updatedAt: number }>();
   const now = Date.now();
   const cacheDuration = getCacheDuration();
 
   // 決定使用哪種數據來源
-  const useRealtime = priceSource === 'realtime' || (priceSource === 'auto' && isTradingHours());
+  // 如果強制刷新，優先嘗試即時價格（即使不在交易時間）
+  const useRealtime = forceRefresh 
+    ? (priceSource === 'twse_stock_day_all' ? false : true) // 強制刷新時，除非明確要求收盤價，否則嘗試即時價格
+    : (priceSource === 'realtime' || (priceSource === 'auto' && isTradingHours()));
   const useClosePrice = priceSource === 'twse_stock_day_all' || (!useRealtime && (priceSource === 'auto' || !priceSource));
 
-  // 先檢查緩存
+  // 先檢查緩存（如果強制刷新，則跳過緩存檢查）
   const codesToFetch: string[] = [];
   const marketTypesToFetch: string[] = [];
 
   stockCodes.forEach((code, index) => {
     const cacheKey = code;
+    
+    // 如果強制刷新，清除該股票的緩存
+    if (forceRefresh) {
+      priceCache.delete(cacheKey);
+    }
+    
     const cached = priceCache.get(cacheKey);
 
     // 檢查緩存是否有效（根據當前交易狀態使用不同的緩存時間）
-    if (cached && now - cached.timestamp < cacheDuration) {
+    if (!forceRefresh && cached && now - cached.timestamp < cacheDuration) {
       priceMap.set(code, { 
         price: cached.price, 
         source: cached.source, 
@@ -291,8 +364,12 @@ const fetchStockPricesBatch = async (
   }
 
   try {
-    // 盤中且使用即時數據，或明確要求即時數據
-    if (useRealtime) {
+    // 如果強制刷新，優先嘗試即時數據（即使不在交易時間）
+    // 盤中且使用即時數據，或明確要求即時數據，或強制刷新
+    if (useRealtime || forceRefresh) {
+      if (forceRefresh) {
+        console.log(`[價格獲取] 強制刷新模式：優先使用即時價格API，股票數量: ${codesToFetch.length}`);
+      }
       const realtimeMap = await fetchRealtimePricesFromMis(
         codesToFetch,
         marketTypesToFetch
@@ -303,9 +380,22 @@ const fetchStockPricesBatch = async (
       
       realtimeMap.forEach((price, code) => {
         if (!isNaN(price) && price > 0) {
-          priceMap.set(code, { price, source: 'realtime', updatedAt: now });
-          priceCache.set(code, { price, timestamp: now, source: 'realtime' });
-          successCodes.add(code);
+          // 標準化代碼：確保能匹配不同格式（0050 vs 000050）
+          const normalizedCode = code.replace(/^0+/, '') || code;
+          const originalCode = codesToFetch.find(c => {
+            const normalized = c.replace(/^0+/, '') || c;
+            return c === code || normalized === normalizedCode || c === normalizedCode || normalized === code;
+          });
+          
+          const finalCode = originalCode || code;
+          priceMap.set(finalCode, { price, source: 'realtime', updatedAt: now });
+          priceCache.set(finalCode, { price, timestamp: now, source: 'realtime' });
+          successCodes.add(finalCode);
+          
+          // 調試日誌：記錄價格獲取情況
+          if (finalCode === '0050' || finalCode.includes('0050')) {
+            console.log(`[價格獲取] 0050: API返回代碼=${code}, 匹配代碼=${finalCode}, 價格=${price}`);
+          }
         }
       });
 
@@ -354,7 +444,34 @@ const fetchStockPricesBatch = async (
 // 獲取所有庫存（根據交易記錄自動計算）
 router.get('/', async (req: AuthRequest, res) => {
   try {
-    const { securitiesAccountId, stockCode } = req.query;
+    const { securitiesAccountId, stockCode, refresh } = req.query;
+    
+    console.log(`[Holdings API] 收到請求: refresh=${refresh}, securitiesAccountId=${securitiesAccountId}, stockCode=${stockCode}`);
+    
+    // 如果要求強制刷新，清除相關股票的緩存
+    if (refresh === 'true' || refresh === '1') {
+      // 先獲取需要清除緩存的股票代碼
+      let queryForCodes = `SELECT DISTINCT t.stock_code
+                          FROM transactions t 
+                          WHERE t.user_id = ?`;
+      const paramsForCodes: any[] = [req.userId];
+      
+      if (securitiesAccountId) {
+        queryForCodes += ' AND t.securities_account_id = ?';
+        paramsForCodes.push(securitiesAccountId);
+      }
+      if (stockCode) {
+        queryForCodes += ' AND t.stock_code LIKE ?';
+        paramsForCodes.push(`%${stockCode}%`);
+      }
+      
+      const stockCodes = await all<{ stock_code: string }>(queryForCodes, paramsForCodes);
+      // 清除這些股票的緩存
+      stockCodes.forEach((row: any) => {
+        priceCache.delete(row.stock_code);
+      });
+      console.log(`強制刷新：已清除 ${stockCodes.length} 檔股票的價格緩存`);
+    }
 
     // 獲取所有交易記錄
     let query = `SELECT t.*, sa.account_name, sa.broker_name, sd.market_type, sd.etf_type, sd.industry
@@ -759,19 +876,40 @@ router.get('/', async (req: AuthRequest, res) => {
     });
 
     // 批量獲取股票價格（包含價格來源資訊）
-    const stockPrices = await fetchStockPricesBatch(stockCodesToFetch, marketTypesToFetch, etfFlagsByCode, priceSource);
+    const forceRefresh = refresh === 'true' || refresh === '1';
+    if (forceRefresh) {
+      console.log(`[強制刷新] 準備獲取 ${stockCodesToFetch.length} 檔股票的價格`);
+    }
+    const stockPrices = await fetchStockPricesBatch(stockCodesToFetch, marketTypesToFetch, etfFlagsByCode, priceSource, forceRefresh);
 
     // 更新holdingsMap中的價格和價格來源資訊
+    let priceUpdateCount = 0;
     holdingsMap.forEach((h: any) => {
       if (h.isDomestic && h.stock_code) {
         const priceInfo = stockPrices.get(h.stock_code);
         if (priceInfo && priceInfo.price !== undefined && priceInfo.price !== null && priceInfo.price > 0) {
+          const oldPrice = h.current_price;
           h.current_price = priceInfo.price;
           h.price_source = priceInfo.source; // 'realtime' 或 'close'
           h.price_updated_at = priceInfo.updatedAt; // 時間戳
+          priceUpdateCount++;
+          
+          // 調試：記錄0050的價格更新
+          if (h.stock_code === '0050' || h.stock_code.includes('0050')) {
+            console.log(`[價格更新] ${h.stock_code} ${h.stock_name}: 舊價格=${oldPrice}, 新價格=${priceInfo.price}, 來源=${priceInfo.source}`);
+          }
+        } else {
+          // 調試：記錄未獲取到價格的股票
+          if (h.stock_code === '0050' || h.stock_code.includes('0050')) {
+            console.log(`[價格更新失敗] ${h.stock_code} ${h.stock_name}: 未獲取到價格信息`);
+          }
         }
       }
     });
+    
+    if (forceRefresh) {
+      console.log(`[強制刷新完成] 成功更新 ${priceUpdateCount} 檔股票的價格`);
+    }
 
     // 轉換為陣列並計算相關數值
     const holdings = Array.from(holdingsMap.values())
@@ -808,10 +946,13 @@ router.get('/', async (req: AuthRequest, res) => {
               // 股票市值 = 市價 × 股數（保持原始精度）
               market_value = (h.current_price || cost_price) * quantity;
               // 盈虧計算：點精靈的計算方式
-              // 根據點精靈的計算邏輯：
-              // 賣出費用 = 賣出手續費 + 賣出交易稅
+              // 根據點精靈的計算邏輯（實際測試發現點精靈使用未折扣的手續費率）：
+              // 賣出費用 = 賣出手續費（未折扣） + 賣出交易稅
               let stockTaxRate = getTaxRate(h.etf_type, h.stock_name, h.stock_code); // 賣出交易稅率（根據股票類型：一般股票0.3%，ETF 0.1%）
-              let stockFeeRate = getFeeRate(h.etf_type, h.stock_code); // 賣出手續費率（原價，根據股票類型：一般股票0.1425%，ETF 0.1425%）
+              // 判斷是否為ETF（優先使用etf_type，如果為null則通過stockCode判斷）
+              const isEtf = !!h.etf_type || isEtfByCode(h.stock_code);
+              // 點精靈在計算盈虧時使用未折扣的手續費率
+              let stockFeeRate = isEtf ? ETF_FEE_RATE : FEE_RATE; // 賣出手續費率（未折扣，與點精靈對齊）
               
               // 點精靈計算：賣出手續費 + 賣出交易稅
               // 點精靈實測對齊（以 0050/00992A 為例）：
@@ -819,12 +960,43 @@ router.get('/', async (req: AuthRequest, res) => {
               // - 預估賣出手續費、交易稅：以「整數」無條件捨去（floor）
               const roundedMarketValue = Math.round(floorTo2Decimals(market_value));
               const roundedHoldingCost = Math.round(holding_cost);
-              const estimatedSellFeeInt = Math.floor(roundedMarketValue * stockFeeRate); // 賣出手續費（整數捨去）
+              const estimatedSellFeeInt = Math.floor(roundedMarketValue * stockFeeRate); // 賣出手續費（折扣後，整數捨去）
               const estimatedSellTaxInt = Math.floor(roundedMarketValue * stockTaxRate); // 賣出交易稅（整數捨去）
               const totalSellCostInt = estimatedSellFeeInt + estimatedSellTaxInt; // 總賣出成本（整數）
               profit_loss = roundedMarketValue - roundedHoldingCost - totalSellCostInt;
               
               // 調試信息：所有國內現股
+              const is0050 = h.stock_code === '0050';
+              if (is0050) {
+                // 計算對比：使用未折扣手續費率的情況
+                const baseFeeRate = isEtf ? ETF_FEE_RATE : FEE_RATE;
+                const estimatedSellFeeNoDiscount = Math.floor(roundedMarketValue * baseFeeRate);
+                const estimatedSellCostNoDiscount = estimatedSellFeeNoDiscount + estimatedSellTaxInt;
+                const profitLossNoDiscount = roundedMarketValue - roundedHoldingCost - estimatedSellCostNoDiscount;
+                
+                console.log(`[0050 盈虧計算詳情]`);
+                console.log(`  股票代碼: ${h.stock_code}, 股票名稱: ${h.stock_name}`);
+                console.log(`  ETF類型: ${h.etf_type}, 是否為ETF: ${isEtf}`);
+                console.log(`  市價: ${h.current_price}`);
+                console.log(`  股數: ${quantity}`);
+                console.log(`  市值(raw): ${market_value}`);
+                console.log(`  市值(先floorTo2Decimals): ${floorTo2Decimals(market_value)}`);
+                console.log(`  市值(整數四捨五入): ${roundedMarketValue}`);
+                console.log(`  持有成本(raw): ${holding_cost}`);
+                console.log(`  持有成本(整數四捨五入): ${roundedHoldingCost}`);
+                console.log(`  手續費率(折扣後): ${stockFeeRate} (${stockFeeRate * 100}%)`);
+                console.log(`  手續費率(未折扣): ${baseFeeRate} (${baseFeeRate * 100}%)`);
+                console.log(`  交易稅率: ${stockTaxRate} (${stockTaxRate * 100}%)`);
+                console.log(`  賣出手續費(折扣後, 整數捨去): ${estimatedSellFeeInt} = floor(${roundedMarketValue} * ${stockFeeRate})`);
+                console.log(`  賣出手續費(未折扣, 整數捨去): ${estimatedSellFeeNoDiscount} = floor(${roundedMarketValue} * ${baseFeeRate})`);
+                console.log(`  賣出交易稅(整數捨去): ${estimatedSellTaxInt} = floor(${roundedMarketValue} * ${stockTaxRate})`);
+                console.log(`  總賣出成本(折扣後): ${totalSellCostInt}`);
+                console.log(`  總賣出成本(未折扣): ${estimatedSellCostNoDiscount}`);
+                console.log(`  盈虧(折扣後): ${roundedMarketValue} - ${roundedHoldingCost} - ${totalSellCostInt} = ${profit_loss}`);
+                console.log(`  盈虧(未折扣): ${roundedMarketValue} - ${roundedHoldingCost} - ${estimatedSellCostNoDiscount} = ${profitLossNoDiscount}`);
+                console.log(`  點精靈顯示: 144688, 系統計算(折扣後): ${profit_loss}, 系統計算(未折扣): ${profitLossNoDiscount}`);
+              }
+              
               console.log(
                 `[國內現股計算結果] ${h.stock_code} ${h.stock_name} ` +
                   `市值(raw)=${market_value}, 市值(整數)=${roundedMarketValue}, ` +
@@ -965,6 +1137,19 @@ router.get('/', async (req: AuthRequest, res) => {
     const totalCost = holdings.reduce((sum: number, h: any) => sum + (h.holding_cost || 0), 0);
     const totalProfitLoss = holdings.reduce((sum: number, h: any) => sum + (h.profit_loss || 0), 0);
     const totalProfitLossPercent = totalCost > 0 ? (totalProfitLoss / totalCost) * 100 : 0;
+
+    // 調試：記錄所有股票的盈虧明細
+    console.log(`[總盈虧計算] 總庫存數=${totalHoldings}, 總市值=${totalMarketValue}, 總成本=${totalCost}, 總盈虧=${totalProfitLoss}`);
+    console.log(`[總盈虧計算] 各股票盈虧明細:`);
+    holdings.forEach((h: any) => {
+      console.log(`  - ${h.stock_code} ${h.stock_name}: 盈虧=${h.profit_loss}, 市值=${h.market_value}, 成本=${h.holding_cost}`);
+    });
+
+    // 調試：記錄0050的最終返回數據
+    const holding0050 = holdings.find((h: any) => h.stock_code === '0050');
+    if (holding0050) {
+      console.log(`[Holdings API 返回] 0050 最終數據: 市價=${holding0050.current_price}, 市值=${holding0050.market_value}, 盈虧=${holding0050.profit_loss}`);
+    }
 
     res.json({
       success: true,

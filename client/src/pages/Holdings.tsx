@@ -177,6 +177,196 @@ const Holdings = () => {
     console.log('export holding details to excel (TODO)');
   };
 
+  // 匯出庫存公式設定
+  const handleExportFormulas = async () => {
+    try {
+      // 獲取交易設定和手續費設定
+      const settingsResponse = await axios.get('/api/settings');
+      const settings = settingsResponse.data.data || {};
+      
+      // 準備公式設定數據
+      const formulasData = {
+        version: '1.0',
+        exportDate: new Date().toISOString(),
+        description: '庫存計算公式設定',
+        formulas: {
+          // ETF自動辨識規則
+          etfIdentificationRules: {
+            description: 'ETF自動辨識規則',
+            rules: [
+              '0050~0057（元大系列老牌 ETF）',
+              '006XXX（6位數字開頭 ETF）',
+              '00XXXL（槓桿型 ETF）、00XXXR（反向型 ETF）、00XXXU（期貨型 ETF）',
+              '00XXXB（債券型 ETF）、00XXXA（主動式 ETF）',
+              '00XXX（5位數字，一般 ETF）',
+              '其他代碼（如 2330、2317）= 普通股'
+            ]
+          },
+          // 費率設定
+          feeSettings: settings.feeSettings || {},
+          // 交易設定
+          tradingSettings: settings.tradingSettings || tradingSettings,
+          // 計算公式說明
+          calculationFormulas: {
+            marketValue: {
+              description: '股票市值計算',
+              formula: '股票市值 = 市價 × 股數',
+              precision: '先無條件捨去到小數2位，再四捨五入成整數'
+            },
+            holdingCost: {
+              description: '持有成本計算',
+              formulas: {
+                cash: '持有成本 = Σ(成交價 × 成交股數 + 買入手續費)，使用 FIFO（先進先出）',
+                financing: '持有成本 = 資自備款 + 資買手續費',
+                shortSell: '持有成本 = 券保證金'
+              },
+              precision: '四捨五入到整數'
+            },
+            costPrice: {
+              description: '成本均價計算',
+              formula: '成本均價 = 持有成本 ÷ 股數',
+              precision: '四捨五入到小數點後第4位'
+            },
+            breakEvenPrice: {
+              description: '損益平衡點計算',
+              formula: '損益平衡點 = 成本均價 ÷ (1 - 賣出手續費率 - 賣出交易稅率)',
+              precision: '四捨五入到小數點後第2位'
+            },
+            profitLoss: {
+              description: '盈虧計算（對齊點精靈）',
+              formulas: {
+                cash: '盈虧 = 市值(整數) - 持有成本(整數) - 賣出費用(整數)',
+                financing: '盈虧 = 市值 - (資買成交價金 + 資買手續費 + 資賣預估息 + 資賣手續費 + 資賣交易稅)',
+                shortSell: '盈虧 = (券賣擔保品 + 券賣預估息) - (券買成交價金 + 券買手續費)',
+                foreign: '盈虧 = 市值 - (持有成本 + 賣出市場費用)'
+              },
+              sellFee: {
+                description: '賣出手續費 = floor(市值 × 手續費率) ← 無條件捨去成整數',
+                description2: '賣出交易稅 = floor(市值 × 交易稅率) ← 無條件捨去成整數',
+                description3: '賣出費用 = 賣出手續費 + 賣出交易稅'
+              },
+              note: '預估賣出費用使用原價手續費率（不打折）'
+            }
+          },
+          // 費率說明
+          feeRates: {
+            etf: {
+              sellFeeRate: '0.1425%（原價）',
+              taxRate: '0.1%'
+            },
+            stock: {
+              sellFeeRate: '0.1425%（原價）',
+              taxRate: '0.3%'
+            }
+          },
+          // 計算範例
+          examples: {
+            '0050': {
+              description: '0050（ETF）範例',
+              marketValue: '市值 = 69.85 × 14,000 = 977,900',
+              holdingCost: '持有成本 = 59.8446 × 14,000 ≈ 837,825',
+              fee: '手續費 = floor(977,900 × 0.1425%) = 1,393',
+              tax: '交易稅 = floor(977,900 × 0.1%) = 977',
+              profitLoss: '盈虧 = 977,900 - 837,825 - 2,370 = 137,705'
+            },
+            '2330': {
+              description: '2330 台積電（普通股）範例',
+              marketValue: '市值 = 1,000 × 1,000 = 1,000,000',
+              holdingCost: '持有成本 = 900 × 1,000 = 900,000',
+              fee: '手續費 = floor(1,000,000 × 0.1425%) = 1,425',
+              tax: '交易稅 = floor(1,000,000 × 0.3%) = 3,000',
+              profitLoss: '盈虧 = 1,000,000 - 900,000 - 4,425 = 95,575'
+            }
+          },
+          // 說明
+          notes: [
+            '系統根據股票代碼自動判定 ETF 或普通股，無需手動設定',
+            '預估賣出費用使用原價手續費率（不打折）',
+            '費率設定請至「系統設定 → 手續費設定」進行調整',
+            '盈虧、盈虧(%)欄位支援手動輸入覆蓋'
+          ]
+        }
+      };
+
+      // 轉換為JSON字符串
+      const jsonString = JSON.stringify(formulasData, null, 2);
+      
+      // 創建Blob並下載
+      const blob = new Blob([jsonString], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `庫存公式設定_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      setError('');
+    } catch (err: any) {
+      console.error('匯出公式設定失敗:', err);
+      setError('匯出公式設定失敗：' + (err.response?.data?.message || err.message));
+    }
+  };
+
+  // 匯入庫存公式設定
+  const handleImportFormulas = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setError('');
+      const text = await file.text();
+      const formulasData = JSON.parse(text);
+
+      // 驗證文件格式
+      if (!formulasData.formulas) {
+        throw new Error('無效的公式設定文件格式');
+      }
+
+      // 如果有交易設定，更新交易設定
+      if (formulasData.formulas.tradingSettings) {
+        try {
+          await axios.put('/api/settings', {
+            settings: {
+              tradingSettings: formulasData.formulas.tradingSettings
+            }
+          });
+          setTradingSettings(formulasData.formulas.tradingSettings);
+        } catch (err: any) {
+          console.error('更新交易設定失敗:', err);
+        }
+      }
+
+      // 如果有手續費設定，更新手續費設定
+      if (formulasData.formulas.feeSettings) {
+        try {
+          await axios.put('/api/settings', {
+            settings: {
+              feeSettings: formulasData.formulas.feeSettings
+            }
+          });
+        } catch (err: any) {
+          console.error('更新手續費設定失敗:', err);
+        }
+      }
+
+      // 重置文件輸入
+      event.target.value = '';
+
+      // 刷新數據
+      fetchHoldings();
+      fetchTradingSettings();
+
+      setError('');
+      alert('公式設定匯入成功！');
+    } catch (err: any) {
+      console.error('匯入公式設定失敗:', err);
+      setError('匯入公式設定失敗：' + (err.message || '文件格式錯誤'));
+      event.target.value = '';
+    }
+  };
+
   useEffect(() => {
     fetchAccounts();
     fetchHoldings();
@@ -293,8 +483,31 @@ const Holdings = () => {
   const handleRefreshPrices = async () => {
     try {
       setRefreshingPrices(true);
+      setError(''); // 清除之前的錯誤
       setPlayedSounds(new Set()); // 重置已播放聲音列表，允許重新播放
-      await fetchHoldings();
+      // 強制刷新價格，清除緩存
+      const params: any = { refresh: 'true' };
+      if (filters.accountId) params.securitiesAccountId = filters.accountId;
+      if (filters.stockCode) params.stockCode = filters.stockCode;
+      
+      console.log('開始更新市價，參數:', params);
+      const response = await axios.get('/api/holdings', { params });
+      console.log('更新市價成功，返回數據:', response.data.data?.length || 0, '筆');
+      setHoldings(response.data.data);
+      if (response.data.stats) {
+        setStats(response.data.stats);
+      }
+
+      // 獲取庫存明細
+      const detailsResponse = await axios.get('/api/holdings/details', { params });
+      setHoldingDetails(detailsResponse.data.data || []);
+      
+      // 顯示成功提示
+      setError(''); // 確保沒有錯誤
+    } catch (err: any) {
+      console.error('更新市價失敗:', err);
+      setError(err.response?.data?.message || err.message || '更新市價失敗');
+      setTimeout(() => setError(''), 5000); // 5秒後清除錯誤信息
     } finally {
       setRefreshingPrices(false);
     }
@@ -1282,7 +1495,62 @@ const Holdings = () => {
 
         {/* 備註說明 */}
         <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <h3 className="text-sm font-medium text-gray-700 mb-2">📋 備註：基礎計算公式（對齊點精靈）</h3>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-medium text-gray-700">📋 備註：基礎計算公式（對齊點精靈）</h3>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleExportFormulas}
+                className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1"
+                title="匯出公式設定"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
+                </svg>
+                匯出公式
+              </button>
+              <button
+                type="button"
+                onClick={() => document.getElementById('importFormulasInput')?.click()}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1"
+                title="匯入公式設定"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                  />
+                </svg>
+                匯入公式
+              </button>
+              <input
+                type="file"
+                id="importFormulasInput"
+                accept=".json"
+                style={{ display: 'none' }}
+                onChange={handleImportFormulas}
+              />
+            </div>
+          </div>
           <div className="text-sm text-gray-600 space-y-2">
             
             <p className="mt-3"><strong>🏷️ ETF 自動辨識規則：</strong></p>
