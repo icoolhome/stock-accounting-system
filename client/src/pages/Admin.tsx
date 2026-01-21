@@ -47,7 +47,7 @@ const Admin = () => {
   const [userStats, setUserStats] = useState<UserStats>({ totalUsers: 0, activeUsers: 0, todayNewUsers: 0 });
   const [userSearch, setUserSearch] = useState('');
   const [userPage, setUserPage] = useState(1);
-  const [userPageSize, setUserPageSize] = useState(10);
+  const [userPageSize, setUserPageSize] = useState(50);
   const [userTotal, setUserTotal] = useState(0);
 
   // 管理員設定
@@ -64,7 +64,7 @@ const Admin = () => {
   const [diagnostics, setDiagnostics] = useState<any>(null);
   const [logs, setLogs] = useState<SystemLog[]>([]);
   const [logPage, setLogPage] = useState(1);
-  const [logPageSize, setLogPageSize] = useState(10);
+  const [logPageSize, setLogPageSize] = useState(50);
   const [logTotal, setLogTotal] = useState(0);
 
   useEffect(() => {
@@ -583,10 +583,10 @@ const Admin = () => {
                 }}
                 className="px-2 py-1 border border-gray-300 rounded-md text-sm"
               >
-                <option value={10}>10</option>
-                <option value={25}>25</option>
                 <option value={50}>50</option>
                 <option value={100}>100</option>
+                <option value={200}>200</option>
+                <option value={500}>500</option>
               </select>
               <span className="text-sm text-gray-700">
                 共 {userTotal} 筆，第 {userPage} / {userTotalPages} 頁
@@ -1009,10 +1009,10 @@ const Admin = () => {
                   }}
                   className="px-2 py-1 border border-gray-300 rounded-md text-sm"
                 >
-                  <option value={10}>10</option>
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={200}>200</option>
+                <option value={500}>500</option>
                 </select>
                 <span className="text-sm text-gray-700">
                   共 {logTotal} 筆，第 {logPage} / {logTotalPages} 頁

@@ -11,9 +11,10 @@ router.use(authenticate);
 router.get('/', async (req: AuthRequest, res) => {
   try {
     const { bankAccountId, startDate, endDate } = req.query;
-    let query = `SELECT bt.*, ba.bank_name, ba.account_number, ba.account_type
+    let query = `SELECT bt.*, ba.bank_name, ba.account_number, ba.account_type, sa.account_name as securities_account_name
                  FROM bank_transactions bt 
                  LEFT JOIN bank_accounts ba ON bt.bank_account_id = ba.id 
+                 LEFT JOIN securities_accounts sa ON ba.securities_account_id = sa.id 
                  WHERE bt.user_id = ?`;
     const params: any[] = [req.userId];
 

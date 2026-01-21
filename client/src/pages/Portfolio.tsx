@@ -32,7 +32,7 @@ const Portfolio = () => {
   const [selectedAccount, setSelectedAccount] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(50);
   const [selectedHoldingKey, setSelectedHoldingKey] = useState<string | null>(null);
 
   useEffect(() => {
@@ -444,10 +444,10 @@ const Portfolio = () => {
                     }}
                     className="px-2 py-1 border border-gray-300 rounded-md text-sm"
                   >
-                    <option value={10}>10</option>
-                    <option value={25}>25</option>
                     <option value={50}>50</option>
                     <option value={100}>100</option>
+                    <option value={200}>200</option>
+                    <option value={500}>500</option>
                   </select>
                   <span className="text-sm text-gray-700">
                     共 {holdingsWithWeight.length} 筆，第 {currentPage} / {totalPages} 頁

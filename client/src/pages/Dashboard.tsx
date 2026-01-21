@@ -13,6 +13,27 @@ interface Transaction {
   price: number;
 }
 
+interface Holding {
+  account_name?: string;
+  broker_name?: string;
+  market_value: number;
+  holding_cost: number;
+  profit_loss: number;
+}
+
+interface SecuritiesAccount {
+  id: number;
+  account_name: string;
+  broker_name: string;
+}
+
+interface BankAccount {
+  id: number;
+  securities_account_id?: number;
+  balance: number;
+  available_balance?: number;
+}
+
 const Dashboard = () => {
   const [holdingsStats, setHoldingsStats] = useState({
     totalMarketValue: 0,
@@ -20,6 +41,9 @@ const Dashboard = () => {
     totalProfitLoss: 0,
     totalProfitLossPercent: 0,
   });
+  const [holdings, setHoldings] = useState<Holding[]>([]);
+  const [accounts, setAccounts] = useState<SecuritiesAccount[]>([]);
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [dividendStats, setDividendStats] = useState({
     totalAfterTax: 0,
     totalDividend: 0,
@@ -49,11 +73,18 @@ const Dashboard = () => {
     try {
       setLoading(true);
       
-      // 獲取庫存統計
+      // 獲取庫存數據
       const holdingsResponse = await axios.get('/api/holdings');
       if (holdingsResponse.data.stats) {
         setHoldingsStats(holdingsResponse.data.stats);
       }
+      if (holdingsResponse.data.data) {
+        setHoldings(holdingsResponse.data.data);
+      }
+
+      // 獲取證券帳戶列表
+      const accountsResponse = await axios.get('/api/securities-accounts');
+      setAccounts(accountsResponse.data.data || []);
 
       // 獲取歷史收益統計（本年度）
       const currentYear = new Date().getFullYear();
@@ -72,7 +103,9 @@ const Dashboard = () => {
 
       // 獲取銀行帳戶統計
       const bankResponse = await axios.get('/api/bank-accounts');
-      const totalBalance = bankResponse.data.data.reduce(
+      const bankAccountsData = bankResponse.data.data || [];
+      setBankAccounts(bankAccountsData);
+      const totalBalance = bankAccountsData.reduce(
         (sum: number, account: any) => sum + (account.balance || 0),
         0
       );
@@ -93,6 +126,36 @@ const Dashboard = () => {
     }
   };
 
+  // 按帳戶分組計算統計
+  const accountStats = accounts.map((account) => {
+    const accountHoldings = holdings.filter(
+      (h) => h.account_name === account.account_name && h.broker_name === account.broker_name
+    );
+    const marketValue = accountHoldings.reduce((sum, h) => sum + (h.market_value || 0), 0);
+    const cost = accountHoldings.reduce((sum, h) => sum + (h.holding_cost || 0), 0);
+    const profitLoss = accountHoldings.reduce((sum, h) => sum + (h.profit_loss || 0), 0);
+    const profitLossPercent = cost > 0 ? (profitLoss / cost) * 100 : 0;
+
+    // 計算該證券帳戶關聯的銀行帳戶餘額
+    const accountBankAccounts = bankAccounts.filter(
+      (ba) => ba.securities_account_id === account.id
+    );
+    const availableBalance = accountBankAccounts.reduce(
+      (sum, ba) => sum + (ba.available_balance !== undefined ? ba.available_balance : ba.balance || 0),
+      0
+    );
+
+    return {
+      account_name: account.account_name,
+      broker_name: account.broker_name,
+      marketValue,
+      cost,
+      profitLoss,
+      profitLossPercent,
+      availableBalance,
+    };
+  }).filter((stat) => stat.marketValue > 0 || stat.cost > 0 || stat.availableBalance > 0); // 只顯示有數據的帳戶
+
   if (loading) {
     return <div className="text-center py-8">載入中...</div>;
   }
@@ -106,23 +169,23 @@ const Dashboard = () => {
           <h1 className="text-2xl font-bold text-gray-900 mb-4">投資組合儀表版</h1>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-blue-50 p-4 rounded-lg">
-              <h3 className="text-sm font-medium text-gray-600">投資組合價值</h3>
+              <h3 className="text-sm font-medium text-gray-600">投資組合價值(總和計)</h3>
               <p className="text-2xl font-bold text-gray-900">
                 ${holdingsStats.totalMarketValue.toFixed(2)}
               </p>
             </div>
             <div className="bg-green-50 p-4 rounded-lg">
-              <h3 className="text-sm font-medium text-gray-600">總成本</h3>
+              <h3 className="text-sm font-medium text-gray-600">總成本(總合計)</h3>
               <p className="text-2xl font-bold text-gray-900">
                 ${holdingsStats.totalCost.toFixed(2)}
               </p>
             </div>
             <div className={`p-4 rounded-lg ${
-              holdingsStats.totalProfitLoss >= 0 ? 'bg-green-50' : 'bg-red-50'
+              holdingsStats.totalProfitLoss >= 0 ? 'bg-red-50' : 'bg-green-50'
             }`}>
-              <h3 className="text-sm font-medium text-gray-600">損益</h3>
+              <h3 className="text-sm font-medium text-gray-600">損益(總合計)</h3>
               <p className={`text-2xl font-bold ${
-                holdingsStats.totalProfitLoss >= 0 ? 'text-green-900' : 'text-red-900'
+                holdingsStats.totalProfitLoss >= 0 ? 'text-red-900' : 'text-green-900'
               }`}>
                 ${holdingsStats.totalProfitLoss.toFixed(2)} ({holdingsStats.totalProfitLossPercent.toFixed(2)}%)
               </p>
@@ -136,18 +199,62 @@ const Dashboard = () => {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
             <div className="bg-yellow-50 p-4 rounded-lg">
-              <h3 className="text-sm font-medium text-gray-600">銀行總額</h3>
+              <h3 className="text-sm font-medium text-gray-600">銀行總額(總合計)</h3>
               <p className="text-2xl font-bold text-gray-900">
                 ${bankStats.totalBalance.toFixed(2)}
               </p>
             </div>
             <div className="bg-blue-50 p-4 rounded-lg">
-              <h3 className="text-sm font-medium text-gray-600">可用餘額</h3>
+              <h3 className="text-sm font-medium text-gray-600">可用餘額(總合計)</h3>
               <p className="text-2xl font-bold text-gray-900">
                 ${bankStats.availableBalance.toFixed(2)}
               </p>
             </div>
           </div>
+
+          {/* 按帳戶分類統計 */}
+          {accountStats.length > 0 && (
+            <div className="mt-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">按交易帳號分類統計</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {accountStats.map((stat, index) => (
+                  <div key={index} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <h4 className="text-sm font-medium text-gray-700 mb-3">
+                      {stat.account_name} - {stat.broker_name}
+                    </h4>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">投資組合價值：</span>
+                        <span className="font-medium text-gray-900">${stat.marketValue.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">總成本：</span>
+                        <span className="font-medium text-gray-900">${stat.cost.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">損益：</span>
+                        <span className={`font-medium ${stat.profitLoss >= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          ${stat.profitLoss.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">報酬率：</span>
+                        <span className={`font-medium ${stat.profitLossPercent >= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          {stat.profitLossPercent.toFixed(2)}%
+                        </span>
+                      </div>
+                      <div className="flex justify-between border-t border-gray-200 pt-2 mt-2">
+                        <span className="text-gray-600 font-medium">可用餘額：</span>
+                        <span className="font-bold text-blue-600">
+                          ${stat.availableBalance.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* 快捷功能 */}

@@ -75,13 +75,13 @@ const Holdings = () => {
     stockCode: '',
   });
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(50);
   const [selectedHoldingRowKey, setSelectedHoldingRowKey] = useState<string | null>(null);
   const [detailSortField, setDetailSortField] = useState<string>('trade_date');
   const [detailSortDirection, setDetailSortDirection] = useState<'asc' | 'desc'>('desc');
   const [selectedHoldingDetailId, setSelectedHoldingDetailId] = useState<number | null>(null);
   const [currentDetailPage, setCurrentDetailPage] = useState(1);
-  const [detailPageSize, setDetailPageSize] = useState(10);
+  const [detailPageSize, setDetailPageSize] = useState(50);
   const [refreshingPrices, setRefreshingPrices] = useState(false);
   const [tradingSettings, setTradingSettings] = useState({
     addPositionThreshold: -5,
@@ -92,6 +92,8 @@ const Holdings = () => {
   const [playedSounds, setPlayedSounds] = useState<Set<string>>(new Set());
   const [editingHolding, setEditingHolding] = useState<string | null>(null);
   const [editedProfitLoss, setEditedProfitLoss] = useState<{ [key: string]: { profit_loss: number; profit_loss_percent: number } }>({});
+  const [editingPrice, setEditingPrice] = useState<string | null>(null);
+  const [editedPrice, setEditedPrice] = useState<{ [key: string]: number }>({});
 
   // 獲取庫存的唯一標識
   const getHoldingKey = (holding: Holding) => {
@@ -165,6 +167,101 @@ const Holdings = () => {
         [field]: value
       }
     }));
+  };
+
+  // 開始編輯市價
+  const startEditPrice = (holding: Holding) => {
+    const key = getHoldingKey(holding);
+    setEditingPrice(key);
+    if (!editedPrice[key]) {
+      setEditedPrice(prev => ({
+        ...prev,
+        [key]: holding.current_price || holding.cost_price || 0
+      }));
+    }
+  };
+
+  // 保存手動輸入的市價
+  const saveEditedPrice = async (holding: Holding) => {
+    const key = getHoldingKey(holding);
+    const price = editedPrice[key];
+    
+    if (price === undefined || price <= 0) {
+      setError('無效的價格');
+      cancelEditPrice(holding);
+      return;
+    }
+
+    try {
+      const response = await axios.put(
+        `/api/holdings/${holding.securities_account_id}/${holding.stock_code}/price`,
+        {
+          price: price,
+          transactionType: holding.transaction_type || '現股'
+        }
+      );
+
+      if (response.data.success) {
+        // 更新本地狀態
+        setHoldings(prevHoldings => 
+          prevHoldings.map(h => {
+            const hKey = getHoldingKey(h);
+            if (hKey === key) {
+              return { 
+                ...h, 
+                current_price: price,
+                price_source: 'manual',
+                price_updated_at: Date.now()
+              };
+            }
+            return h;
+          })
+        );
+        setEditingPrice(null);
+        setError('');
+      } else {
+        setError(response.data.message || '更新市價失敗');
+      }
+    } catch (err: any) {
+      console.error('更新市價失敗:', err);
+      setError(err.response?.data?.message || err.message || '更新市價失敗');
+    }
+  };
+
+  // 取消編輯市價
+  const cancelEditPrice = (holding: Holding) => {
+    const key = getHoldingKey(holding);
+    setEditingPrice(null);
+    setEditedPrice(prev => {
+      const newState = { ...prev };
+      delete newState[key];
+      return newState;
+    });
+  };
+
+  // 清除手動設置的市價（恢復自動獲取）
+  const clearManualPrice = async (holding: Holding) => {
+    try {
+      const response = await axios.delete(
+        `/api/holdings/${holding.securities_account_id}/${holding.stock_code}/price`,
+        {
+          params: {
+            transactionType: holding.transaction_type || '現股'
+          }
+        }
+      );
+
+      if (response.data.success) {
+        // 刷新庫存數據
+        await fetchHoldings();
+        setError('');
+      } else {
+        setError(response.data.message || '清除市價失敗');
+      }
+    } catch (err: any) {
+      console.error('清除市價失敗:', err);
+      setError(err.response?.data?.message || err.message || '清除市價失敗');
+    }
   };
 
   const handleExportHoldingsExcel = () => {
@@ -520,6 +617,50 @@ const Holdings = () => {
     currentPage * pageSize
   );
 
+  // 依交易帳號分類統計庫存
+  const accountStats = (() => {
+    const map: {
+      [key: string]: {
+        accountLabel: string;
+        totalMarketValue: number;
+        totalCost: number;
+        totalProfitLoss: number;
+      };
+    } = {};
+
+    holdings.forEach((h) => {
+      const accountLabel = h.account_name ? `${h.account_name} - ${h.broker_name}` : '未指定帳號';
+      const key = `${h.securities_account_id || 'null'}_${accountLabel}`;
+
+      if (!map[key]) {
+        map[key] = {
+          accountLabel,
+          totalMarketValue: 0,
+          totalCost: 0,
+          totalProfitLoss: 0,
+        };
+      }
+
+      const marketValue = h.market_value || 0;
+      const holdingCost = h.holding_cost || (h.cost_price * h.quantity) || 0;
+      const profitLoss = h.profit_loss || 0;
+
+      map[key].totalMarketValue += marketValue;
+      map[key].totalCost += holdingCost;
+      map[key].totalProfitLoss += profitLoss;
+    });
+
+    // 轉成陣列並計算每個帳號的損益％
+    return Object.values(map).map((item) => {
+      const percent =
+        item.totalCost > 0 ? (item.totalProfitLoss / item.totalCost) * 100 : 0;
+      return {
+        ...item,
+        totalProfitLossPercent: percent,
+      };
+    });
+  })();
+
   if (loading && holdings.length === 0) {
     return <div className="text-center py-8">{t('common.loading', '載入中...')}</div>;
   }
@@ -553,6 +694,67 @@ const Holdings = () => {
             </p>
           </div>
         </div>
+
+        {/* 依交易帳號分類統計 */}
+        {accountStats.length > 0 && (
+          <div className="mb-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-3">依交易帳號分類統計</h2>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200 text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-medium text-gray-500 whitespace-nowrap">
+                      交易帳號
+                    </th>
+                    <th className="px-3 py-2 text-right font-medium text-gray-500 whitespace-nowrap">
+                      總市值
+                    </th>
+                    <th className="px-3 py-2 text-right font-medium text-gray-500 whitespace-nowrap">
+                      總成本
+                    </th>
+                    <th className="px-3 py-2 text-right font-medium text-gray-500 whitespace-nowrap">
+                      總損益
+                    </th>
+                    <th className="px-3 py-2 text-right font-medium text-gray-500 whitespace-nowrap">
+                      總損益(%)
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {accountStats.map((a) => (
+                    <tr key={a.accountLabel}>
+                      <td className="px-3 py-2 whitespace-nowrap text-gray-900">
+                        {a.accountLabel}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap text-right text-gray-900">
+                        {a.totalMarketValue === 0 ? '' : a.totalMarketValue.toFixed(2)}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap text-right text-gray-900">
+                        {a.totalCost === 0 ? '' : Math.round(a.totalCost).toString()}
+                      </td>
+                      <td
+                        className={`px-3 py-2 whitespace-nowrap text-right ${
+                          a.totalProfitLoss >= 0 ? 'text-red-600' : 'text-green-600'
+                        }`}
+                      >
+                        {a.totalProfitLoss === 0 ? '' : a.totalProfitLoss.toFixed(2)}
+                      </td>
+                      <td
+                        className={`px-3 py-2 whitespace-nowrap text-right ${
+                          a.totalProfitLossPercent >= 0 ? 'text-red-600' : 'text-green-600'
+                        }`}
+                      >
+                        {a.totalProfitLossPercent === 0
+                          ? ''
+                          : a.totalProfitLossPercent.toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* 篩選條件 */}
         <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -730,20 +932,80 @@ const Holdings = () => {
                           {formatValue(holding.break_even_price || holding.cost_price)}
                         </td>
                         {/* 市價 */}
-                        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
-                          <div className="flex flex-col items-end">
-                            <span>{formatValue(holding.current_price || holding.cost_price)}</span>
-                            {holding.price_source && (
+                        <td 
+                          className="px-3 py-4 whitespace-nowrap text-sm text-gray-900 text-right"
+                          onDoubleClick={() => startEditPrice(holding)}
+                          title="雙擊可手動編輯市價，右鍵可清除手動設置"
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            if (holding.price_source === 'manual') {
+                              if (window.confirm('確定要清除手動設置的市價，恢復自動獲取嗎？')) {
+                                clearManualPrice(holding);
+                              }
+                            }
+                          }}
+                        >
+                          {editingPrice === getHoldingKey(holding) ? (
+                            <div className="flex items-center gap-1 justify-end">
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={
+                                  editedPrice[getHoldingKey(holding)] ??
+                                  (holding.current_price || holding.cost_price || 0)
+                                }
+                                onChange={(e) => {
+                                  const newValue = parseFloat(e.target.value) || 0;
+                                  setEditedPrice(prev => ({
+                                    ...prev,
+                                    [getHoldingKey(holding)]: newValue
+                                  }));
+                                }}
+                                onBlur={() => saveEditedPrice(holding)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    saveEditedPrice(holding);
+                                  } else if (e.key === 'Escape') {
+                                    cancelEditPrice(holding);
+                                  }
+                                }}
+                                className="w-24 px-2 py-1 border border-gray-300 rounded text-right"
+                                autoFocus
+                              />
+                              <button
+                                onClick={() => saveEditedPrice(holding)}
+                                className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
+                                title="保存"
+                              >
+                                ✓
+                              </button>
+                              <button
+                                onClick={() => cancelEditPrice(holding)}
+                                className="px-2 py-1 text-xs bg-gray-500 text-white rounded hover:bg-gray-600"
+                                title="取消"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-end">
+                              <span className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded">
+                                {formatValue(holding.current_price || holding.cost_price)}
+                              </span>
                               <span className={`text-xs mt-0.5 ${
                                 holding.price_source === 'realtime' 
                                   ? 'text-green-600' 
+                                  : holding.price_source === 'manual'
+                                  ? 'text-blue-600'
                                   : 'text-gray-500'
                               }`} title={
                                 holding.price_source === 'realtime' 
                                   ? '即時價格' 
+                                  : holding.price_source === 'manual'
+                                  ? '手動設置'
                                   : '收盤價'
                               }>
-                                {holding.price_source === 'realtime' ? '⚡即時' : '📊收盤'}
+                                {holding.price_source === 'realtime' ? '⚡即時' : holding.price_source === 'manual' ? '✏️手動' : '📊收盤'}
                                 {holding.price_updated_at && (
                                   <span className="text-gray-400 ml-1">
                                     {new Date(holding.price_updated_at).toLocaleTimeString('zh-TW', { 
@@ -753,8 +1015,8 @@ const Holdings = () => {
                                   </span>
                                 )}
                               </span>
-                            )}
-                          </div>
+                            </div>
+                          )}
                         </td>
                         {/* 股票市值 */}
                         <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
@@ -1046,10 +1308,10 @@ const Holdings = () => {
                   }}
                   className="px-2 py-1 border border-gray-300 rounded-md text-sm"
                 >
-                  <option value={10}>10</option>
-                  <option value={25}>25</option>
                   <option value={50}>50</option>
                   <option value={100}>100</option>
+                  <option value={200}>200</option>
+                  <option value={500}>500</option>
                 </select>
                 <span className="text-sm text-gray-700">
                   共 {holdings.length} 筆，第 {currentPage} / {totalPages} 頁
@@ -1446,10 +1708,10 @@ const Holdings = () => {
                           }}
                           className="px-2 py-1 border border-gray-300 rounded-md text-sm"
                         >
-                          <option value={10}>10</option>
-                          <option value={25}>25</option>
                           <option value={50}>50</option>
                           <option value={100}>100</option>
+                          <option value={200}>200</option>
+                          <option value={500}>500</option>
                         </select>
                         <span className="text-sm text-gray-700">
                           共 {sortedDetailsForPagination.length} 筆，第 {currentDetailPage} / {totalDetailPages || 1} 頁

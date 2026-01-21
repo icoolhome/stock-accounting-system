@@ -242,6 +242,16 @@ export const initDatabase = async (): Promise<void> => {
     }
   }
 
+  // 為 dividends 表添加 securities_account_id 字段（如果不存在）
+  try {
+    await runNoParams(`ALTER TABLE dividends ADD COLUMN securities_account_id INTEGER`);
+  } catch (e: any) {
+    // 字段已存在，忽略錯誤
+    if (!e.message.includes('duplicate column')) {
+      console.warn('添加 securities_account_id 字段時出現錯誤（可能字段已存在）:', e.message);
+    }
+  }
+
   // 系統設定表
   await runNoParams(`
     CREATE TABLE IF NOT EXISTS system_settings (

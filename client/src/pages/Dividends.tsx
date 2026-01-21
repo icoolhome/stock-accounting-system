@@ -15,6 +15,15 @@ interface Dividend {
   share_count?: number;
   source?: string;
   description?: string;
+  account_name?: string;
+  broker_name?: string;
+  securities_account_id?: number;
+}
+
+interface SecuritiesAccount {
+  id: number;
+  account_name: string;
+  broker_name: string;
 }
 
 const INCOME_TYPES = ['全部', '股息', 'ETF股息', '資本利得', '除權除息', '其他收益'];
@@ -22,6 +31,7 @@ const INCOME_TYPES = ['全部', '股息', 'ETF股息', '資本利得', '除權�
 const Dividends = () => {
   const [activeTab, setActiveTab] = useState<'history' | 'twse'>('history');
   const [dividends, setDividends] = useState<Dividend[]>([]);
+  const [accounts, setAccounts] = useState<SecuritiesAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingDividend, setEditingDividend] = useState<Dividend | null>(null);
@@ -41,7 +51,7 @@ const Dividends = () => {
     stockCode: '',
   });
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(50);
   const [dragging, setDragging] = useState(false);
   const [modalPosition, setModalPosition] = useState({ x: 0, y: 0 });
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
@@ -52,6 +62,7 @@ const Dividends = () => {
   const [twseRecords, setTwseRecords] = useState<string[][]>([]);
 
   const [formData, setFormData] = useState({
+    securities_account_id: '' as number | '',
     record_date: format(new Date(), 'yyyy-MM-dd'),
     income_type: '全部',
     stock_code: '',
@@ -66,8 +77,18 @@ const Dividends = () => {
   });
 
   useEffect(() => {
+    fetchAccounts();
     fetchDividends();
   }, [filters, currentPage, pageSize]);
+
+  const fetchAccounts = async () => {
+    try {
+      const response = await axios.get('/api/securities-accounts');
+      setAccounts(response.data.data || []);
+    } catch (err: any) {
+      console.error('獲取證券帳戶失敗:', err);
+    }
+  };
 
   // 根據股票代碼自動帶出股票名稱（簡易查詢）
   const handleStockCodeBlur = async () => {
@@ -123,6 +144,7 @@ const Dividends = () => {
     try {
       const data = {
         ...formData,
+        securities_account_id: formData.securities_account_id === '' ? null : (parseInt(formData.securities_account_id.toString()) || null),
         pre_tax_amount: formData.pre_tax_amount === '' ? 0 : parseFloat(formData.pre_tax_amount.toString()),
         tax_amount: formData.tax_amount === '' ? 0 : parseFloat(formData.tax_amount.toString()),
         after_tax_amount: formData.after_tax_amount === '' ? 0 : parseFloat(formData.after_tax_amount.toString()),
@@ -147,6 +169,7 @@ const Dividends = () => {
   const handleEdit = (dividend: Dividend) => {
     setEditingDividend(dividend);
     setFormData({
+      securities_account_id: dividend.securities_account_id || '' as number | '',
       record_date: dividend.record_date,
       income_type: dividend.income_type,
       stock_code: dividend.stock_code,
@@ -174,6 +197,7 @@ const Dividends = () => {
 
   const resetForm = () => {
     setFormData({
+      securities_account_id: '' as number | '',
       record_date: format(new Date(), 'yyyy-MM-dd'),
       income_type: '全部',
       stock_code: '',
@@ -211,6 +235,36 @@ const Dividends = () => {
   const handleModalMouseUp = () => {
     setDragging(false);
   };
+
+  // 按交易帳號分類統計
+  const accountStats = accounts.map((account) => {
+    const accountDividends = dividends.filter(
+      (d) => d.account_name === account.account_name && d.broker_name === account.broker_name
+    );
+    const totalAfterTax = accountDividends.reduce((sum, d) => sum + (d.after_tax_amount || 0), 0);
+    const dividendRecords = accountDividends.filter(
+      (d) => d.income_type === '股息' || d.income_type === 'ETF股息'
+    );
+    const totalDividend = dividendRecords.reduce((sum, d) => sum + (d.after_tax_amount || 0), 0);
+    const totalCapitalGain = accountDividends
+      .filter((d) => d.income_type === '資本利得')
+      .reduce((sum, d) => sum + (d.after_tax_amount || 0), 0);
+    const totalTax = accountDividends.reduce((sum, d) => sum + (d.tax_amount || 0), 0);
+    
+    // 計算每股股息（加權平均：總股息金額 / 總股數）
+    const totalShareCount = dividendRecords.reduce((sum, d) => sum + (d.share_count || 0), 0);
+    const averageDividendPerShare = totalShareCount > 0 ? totalDividend / totalShareCount : 0;
+
+    return {
+      account_name: account.account_name,
+      broker_name: account.broker_name,
+      totalAfterTax,
+      totalDividend,
+      totalCapitalGain,
+      totalTax,
+      averageDividendPerShare,
+    };
+  }).filter((stat) => stat.totalAfterTax > 0 || stat.totalDividend > 0 || stat.totalCapitalGain > 0 || stat.totalTax > 0); // 只顯示有數據的帳戶
 
   const totalPages = Math.ceil(dividends.length / pageSize);
   const paginatedDividends = dividends.slice(
@@ -358,6 +412,40 @@ const Dividends = () => {
               </div>
             </div>
 
+            {/* 按交易帳號分類統計 */}
+            {accountStats.length > 0 && (
+              <div className="mb-6">
+                <h2 className="text-xl font-bold text-gray-900 mb-4">按交易帳號分類統計</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {accountStats.map((stat, index) => (
+                    <div key={index} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                      <h4 className="text-sm font-medium text-gray-700 mb-3">
+                        {stat.account_name} - {stat.broker_name}
+                      </h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">總收益(稅後)：</span>
+                          <span className="font-medium text-gray-900">${stat.totalAfterTax.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">股息收入：</span>
+                          <span className="font-medium text-gray-900">${stat.totalDividend.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">資本利得：</span>
+                          <span className="font-medium text-gray-900">${stat.totalCapitalGain.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between border-t border-gray-200 pt-2 mt-2">
+                          <span className="text-gray-600 font-medium">總稅額：</span>
+                          <span className="font-bold text-red-600">${stat.totalTax.toFixed(2)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* 篩選條件 */}
             <div className="mb-6 grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
@@ -423,6 +511,8 @@ const Dividends = () => {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">收益類型</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">股票代號</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">股票名稱</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">交易帳號</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">每股股息</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">稅後金額</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">操作</th>
                   </tr>
@@ -449,6 +539,16 @@ const Dividends = () => {
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                         {dividend.stock_name}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {dividend.account_name && dividend.broker_name
+                          ? `${dividend.account_name} - ${dividend.broker_name}`
+                          : dividend.account_name || '-'}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {dividend.dividend_per_share !== null && dividend.dividend_per_share !== undefined
+                          ? `$${dividend.dividend_per_share.toFixed(4)}`
+                          : '-'}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                         ${dividend.after_tax_amount.toFixed(2)}
@@ -486,10 +586,10 @@ const Dividends = () => {
                       }}
                       className="px-2 py-1 border border-gray-300 rounded-md text-sm"
                     >
-                      <option value={10}>10</option>
-                      <option value={25}>25</option>
                       <option value={50}>50</option>
                       <option value={100}>100</option>
+                      <option value={200}>200</option>
+                      <option value={500}>500</option>
                     </select>
                     <span className="text-sm text-gray-700">
                       共 {dividends.length} 筆，第 {currentPage} / {totalPages} 頁
@@ -654,6 +754,21 @@ const Dividends = () => {
                       onChange={(e) => setFormData({ ...formData, record_date: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md"
                     />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">交易帳號</label>
+                    <select
+                      value={formData.securities_account_id === '' ? '' : formData.securities_account_id}
+                      onChange={(e) => setFormData({ ...formData, securities_account_id: e.target.value === '' ? '' as number | '' : (parseInt(e.target.value) || '' as number | '') })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    >
+                      <option value="">請選擇</option>
+                      {accounts.map((account) => (
+                        <option key={account.id} value={account.id}>
+                          {account.account_name} - {account.broker_name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">收益類型 *</label>

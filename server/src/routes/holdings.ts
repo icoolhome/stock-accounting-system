@@ -76,12 +76,22 @@ const fetchRealtimePricesFromMis = async (
 
   try {
     const channels: string[] = [];
-    stockCodes.forEach((code, idx) => {
-      const market = marketTypes[idx] || '上市';
-      const m = market.includes('上櫃') ? 'otc' : 'tse';
-      const normCode = code.padStart(4, '0');
+  stockCodes.forEach((code, idx) => {
+    const market = marketTypes[idx];
+    const normCode = code.padStart(4, '0');
+
+    // 若市場別不明，為避免上市/上櫃誤判，兩種通道都加入
+    const shouldTryBoth = !market || market.trim() === '';
+    const isOtc = market ? market.includes('上櫃') || market.includes('興櫃') : false;
+
+    if (shouldTryBoth) {
+      channels.push(`tse_${normCode}.tw`);
+      channels.push(`otc_${normCode}.tw`);
+    } else {
+      const m = isOtc ? 'otc' : 'tse';
       channels.push(`${m}_${normCode}.tw`);
-    });
+    }
+  });
 
     const exCh = encodeURIComponent(channels.join('|'));
     const url = `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=${exCh}&json=1&delay=0`;
@@ -267,21 +277,8 @@ const fetchClosePricesFromOpenAPI = async (
           console.log(`[TWSE OpenAPI] 0050 原始數據:`, JSON.stringify(stock, null, 2));
         }
         
-        // 優先使用最後成交價（Z字段），因為這是最新的價格
-        // 如果最後成交價不可用，再使用收盤價
-        const lastPrice = stock.Z || stock.z || stock.最後成交價;
-        if (lastPrice && !isNaN(parseFloat(lastPrice))) {
-          const price = parseFloat(lastPrice);
-          result.set(code, price);
-          
-          // 調試：記錄0050的價格
-          if (code === '0050' || code.includes('0050')) {
-            console.log(`[TWSE OpenAPI] 0050 使用最後成交價: ${lastPrice} -> ${price}`);
-          }
-          return;
-        }
-        
-        // 如果最後成交價不可用，使用收盤價
+        // 收盤後優先使用當日收盤價（Close字段），這是當日的最終收盤價
+        // 如果收盤價不可用，再使用最後成交價作為備選
         const closePrice = stock.Close || stock.close || stock.收盤價;
         if (closePrice && !isNaN(parseFloat(closePrice))) {
           const price = parseFloat(closePrice);
@@ -289,7 +286,20 @@ const fetchClosePricesFromOpenAPI = async (
           
           // 調試：記錄0050的價格
           if (code === '0050' || code.includes('0050')) {
-            console.log(`[TWSE OpenAPI] 0050 使用收盤價: ${closePrice} -> ${price}`);
+            console.log(`[TWSE OpenAPI] 0050 使用當日收盤價: ${closePrice} -> ${price}`);
+          }
+          return;
+        }
+        
+        // 如果收盤價不可用，使用最後成交價作為備選
+        const lastPrice = stock.Z || stock.z || stock.最後成交價;
+        if (lastPrice && !isNaN(parseFloat(lastPrice))) {
+          const price = parseFloat(lastPrice);
+          result.set(code, price);
+          
+          // 調試：記錄0050的價格
+          if (code === '0050' || code.includes('0050')) {
+            console.log(`[TWSE OpenAPI] 0050 使用最後成交價（備選）: ${lastPrice} -> ${price}`);
           }
           return;
         }
@@ -313,6 +323,92 @@ const fetchClosePricesFromOpenAPI = async (
   return result;
 };
 
+// 從 Yahoo Finance API 獲取股票價格（支援即時價格和收盤價）
+const fetchPricesFromYahoo = async (
+  stockCodes: string[],
+  inTradingHours: boolean,
+  marketMapByCode?: Map<string, string>
+): Promise<Map<string, { price: number; source: string }>> => {
+  const result = new Map<string, { price: number; source: string }>();
+  if (!stockCodes.length) return result;
+
+  try {
+    // Yahoo Finance API 需要逐個查詢，或使用批量查詢
+    // 使用 v8/finance/chart API
+    for (const code of stockCodes) {
+      try {
+        const market = marketMapByCode?.get(code) || '';
+        const isOtc = market.includes('上櫃') || market.includes('興櫃') || market.includes('櫃');
+        const symbol = `${code}.${isOtc ? 'TWO' : 'TW'}`;
+        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1m&range=1d`;
+        
+        const response = await fetch(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          console.error(`Yahoo Finance API 請求失敗 (${code}):`, response.status);
+          continue;
+        }
+
+        const data = await response.json() as any;
+        
+        if (!data.chart || !data.chart.result || !Array.isArray(data.chart.result) || data.chart.result.length === 0) {
+          console.error(`Yahoo Finance API 返回格式錯誤 (${code})`);
+          continue;
+        }
+
+        const stockData = data.chart.result[0];
+        const meta = stockData.meta || {};
+        
+        // 獲取價格資訊
+        const regularMarketPrice = meta.regularMarketPrice;
+        const previousClose = meta.previousClose;
+        const regularMarketTime = meta.regularMarketTime;
+        
+        // 判斷是否在交易時間內
+        const now = Math.floor(Date.now() / 1000); // 轉換為秒
+        const isMarketOpen = inTradingHours && regularMarketTime && (now - regularMarketTime) < 3600; // 1小時內有更新
+        
+        let price: number | null = null;
+        let source = 'close';
+        
+        if (isMarketOpen && regularMarketPrice) {
+          // 盤中：使用即時價格
+          price = regularMarketPrice;
+          source = 'realtime';
+        } else if (regularMarketPrice) {
+          // 收盤後：使用當日收盤價（regularMarketPrice 在收盤後就是收盤價）
+          price = regularMarketPrice;
+          source = 'close';
+        } else if (previousClose) {
+          // 如果沒有當日價格，使用昨收作為備選
+          price = previousClose;
+          source = 'close';
+        }
+
+        if (price && !isNaN(price) && price > 0) {
+          result.set(code, { price, source });
+          
+          // 調試：記錄價格獲取情況
+          if (code === '00901' || code === '0050') {
+            console.log(`[Yahoo Finance] ${code}: 價格=${price}, 來源=${source}, 交易時間=${inTradingHours}, regularMarketPrice=${regularMarketPrice}, previousClose=${previousClose}`);
+          }
+        }
+      } catch (err: any) {
+        console.error(`從 Yahoo Finance 獲取價格失敗 (${code}):`, err.message);
+      }
+    }
+  } catch (error: any) {
+    console.error('從 Yahoo Finance 獲取價格失敗:', error.message);
+  }
+
+  return result;
+};
+
 const fetchStockPricesBatch = async (
   stockCodes: string[],
   marketTypes: string[],
@@ -325,15 +421,36 @@ const fetchStockPricesBatch = async (
   const cacheDuration = getCacheDuration();
 
   // 決定使用哪種數據來源
-  // 如果強制刷新，優先嘗試即時價格（即使不在交易時間）
-  const useRealtime = forceRefresh 
-    ? (priceSource === 'twse_stock_day_all' ? false : true) // 強制刷新時，除非明確要求收盤價，否則嘗試即時價格
-    : (priceSource === 'realtime' || (priceSource === 'auto' && isTradingHours()));
-  const useClosePrice = priceSource === 'twse_stock_day_all' || (!useRealtime && (priceSource === 'auto' || !priceSource));
+  // 規則（符合你的需求）：
+  // - 09:00-13:30（盤中）：使用即時價格
+  // - 13:30 之後（收盤後）：使用當日收盤價
+  const inTradingHours = isTradingHours(); // 09:00-13:30
+
+  let useRealtime: boolean;
+
+  if (!inTradingHours) {
+    // 收盤後一律使用收盤價（除非明確指定 priceSource = 'realtime'，目前庫存頁面不會這樣做）
+    useRealtime = priceSource === 'realtime';
+  } else {
+    // 盤中：預設使用即時價格
+    if (priceSource === 'twse_stock_day_all') {
+      // 即使用了收盤價來源設定，盤中仍以即時價格為主
+      useRealtime = true;
+    } else if (priceSource === 'realtime') {
+      useRealtime = true;
+    } else {
+      // auto / 其他：盤中用即時
+      useRealtime = true;
+    }
+  }
+
+  const useClosePrice = !useRealtime;
 
   // 先檢查緩存（如果強制刷新，則跳過緩存檢查）
   const codesToFetch: string[] = [];
   const marketTypesToFetch: string[] = [];
+  // 建立代碼 -> 市場別對照表，供後續降級時使用正確通道
+  const marketMapByCode = new Map<string, string>();
 
   stockCodes.forEach((code, index) => {
     const cacheKey = code;
@@ -354,7 +471,9 @@ const fetchStockPricesBatch = async (
       });
     } else {
       codesToFetch.push(code);
-      marketTypesToFetch.push(marketTypes[index] || '上市');
+      const market = marketTypes[index] || '上市';
+      marketTypesToFetch.push(market);
+      marketMapByCode.set(code, market);
     }
   });
 
@@ -364,55 +483,107 @@ const fetchStockPricesBatch = async (
   }
 
   try {
-    // 如果強制刷新，優先嘗試即時數據（即使不在交易時間）
-    // 盤中且使用即時數據，或明確要求即時數據，或強制刷新
-    if (useRealtime || forceRefresh) {
-      if (forceRefresh) {
-        console.log(`[價格獲取] 強制刷新模式：優先使用即時價格API，股票數量: ${codesToFetch.length}`);
+    // 優先使用 Yahoo Finance API（根據用戶要求）
+    // 根據交易時間自動切換：09:00-13:30 使用即時價格，13:30 之後使用收盤價
+    console.log(
+      `[價格獲取] 使用 Yahoo Finance API，股票數量: ${codesToFetch.length}, 交易時間: ${inTradingHours}`
+    );
+    const yahooPrices = await fetchPricesFromYahoo(codesToFetch, inTradingHours, marketMapByCode);
+
+    // 記錄成功獲取的代碼
+    const successCodes = new Set<string>();
+
+    yahooPrices.forEach((priceInfo, code) => {
+      if (priceInfo.price > 0) {
+        priceMap.set(code, {
+          price: priceInfo.price,
+          source: priceInfo.source,
+          updatedAt: now,
+        });
+        priceCache.set(code, {
+          price: priceInfo.price,
+          timestamp: now,
+          source: priceInfo.source,
+        });
+        successCodes.add(code);
       }
-      const realtimeMap = await fetchRealtimePricesFromMis(
-        codesToFetch,
-        marketTypesToFetch
-      );
+    });
 
-      // 記錄成功獲取的代碼
-      const successCodes = new Set<string>();
-      
-      realtimeMap.forEach((price, code) => {
-        if (!isNaN(price) && price > 0) {
-          // 標準化代碼：確保能匹配不同格式（0050 vs 000050）
-          const normalizedCode = code.replace(/^0+/, '') || code;
-          const originalCode = codesToFetch.find(c => {
-            const normalized = c.replace(/^0+/, '') || c;
-            return c === code || normalized === normalizedCode || c === normalizedCode || normalized === code;
-          });
-          
-          const finalCode = originalCode || code;
-          priceMap.set(finalCode, { price, source: 'realtime', updatedAt: now });
-          priceCache.set(finalCode, { price, timestamp: now, source: 'realtime' });
-          successCodes.add(finalCode);
-          
-          // 調試日誌：記錄價格獲取情況
-          if (finalCode === '0050' || finalCode.includes('0050')) {
-            console.log(`[價格獲取] 0050: API返回代碼=${code}, 匹配代碼=${finalCode}, 價格=${price}`);
-          }
-        }
-      });
+    const failedCodes = codesToFetch.filter((code) => !successCodes.has(code));
 
-      // 如果即時數據獲取失敗或部分失敗，降級到收盤價
-      const failedCodes = codesToFetch.filter(code => !successCodes.has(code));
+    if (useRealtime) {
+      // 需要即時價：對 Yahoo 失敗的部份，改用 TWSE MIS 即時價，再不行才用收盤價
       if (failedCodes.length > 0) {
-        console.log(`即時數據獲取失敗，降級到收盤價，影響 ${failedCodes.length} 檔股票`);
-        const closePriceMap = await fetchClosePricesFromOpenAPI(failedCodes);
-        closePriceMap.forEach((price, code) => {
+        if (forceRefresh) {
+          console.log(
+            `[價格獲取] 降級：使用 TWSE 即時價格API，股票數量: ${failedCodes.length}`
+          );
+        } else if (inTradingHours) {
+          console.log(
+            `[價格獲取] 降級：使用 TWSE 即時價格API（交易時間內），股票數量: ${failedCodes.length}`
+          );
+        } else {
+          console.log(
+            `[價格獲取] 降級：使用 TWSE 即時價格API，股票數量: ${failedCodes.length}`
+          );
+        }
+
+        const realtimeMap = await fetchRealtimePricesFromMis(
+          failedCodes,
+          failedCodes.map((code) => marketMapByCode.get(code) || '上市')
+        );
+
+        const twseSuccessCodes = new Set<string>();
+
+        realtimeMap.forEach((price, code) => {
           if (!isNaN(price) && price > 0) {
-            priceMap.set(code, { price, source: 'close', updatedAt: now });
-            priceCache.set(code, { price, timestamp: now, source: 'close' });
+            const normalizedCode = code.replace(/^0+/, '') || code;
+            const originalCode = failedCodes.find((c) => {
+              const normalized = c.replace(/^0+/, '') || c;
+              return (
+                c === code ||
+                normalized === normalizedCode ||
+                c === normalizedCode ||
+                normalized === code
+              );
+            });
+
+            const finalCode = originalCode || code;
+            priceMap.set(finalCode, { price, source: 'realtime', updatedAt: now });
+            priceCache.set(finalCode, {
+              price,
+              timestamp: now,
+              source: 'realtime',
+            });
+            twseSuccessCodes.add(finalCode);
+
+            if (finalCode === '0050' || finalCode.includes('0050')) {
+              console.log(
+                `[TWSE 即時] 0050: API返回代碼=${code}, 匹配代碼=${finalCode}, 價格=${price}`
+              );
+            }
           }
         });
+
+        const stillFailedCodes = failedCodes.filter((code) => !twseSuccessCodes.has(code));
+        if (stillFailedCodes.length > 0) {
+          console.log(
+            `TWSE 即時數據獲取失敗，降級到收盤價，影響 ${stillFailedCodes.length} 檔股票`
+          );
+          const closePriceMap = await fetchClosePricesFromOpenAPI(stillFailedCodes);
+          closePriceMap.forEach((price, code) => {
+            if (!isNaN(price) && price > 0) {
+              priceMap.set(code, { price, source: 'close', updatedAt: now });
+              priceCache.set(code, { price, timestamp: now, source: 'close' });
+            }
+          });
+        }
       }
     } else {
-      // 盤後或明確要求收盤價
+      // 不需要即時價：直接對所有 codesToFetch 使用收盤價
+      console.log(
+        `[價格獲取] 使用收盤價API，股票數量: ${codesToFetch.length}，交易時間: ${inTradingHours}`
+      );
       const closePriceMap = await fetchClosePricesFromOpenAPI(codesToFetch);
       closePriceMap.forEach((price, code) => {
         if (!isNaN(price) && price > 0) {
@@ -631,6 +802,14 @@ router.get('/', async (req: AuthRequest, res) => {
     const FINANCING_INTEREST_RATE = 0.06; // 融資利率（預設6%，年化）
     const BORROWING_FEE_RATE = 0.001; // 借券費率（預設0.1%）
 
+    // 調試：統計 0050 的所有交易
+    const transactions0050 = transactions.filter((t: any) => t.stock_code === '0050' || t.stock_code === '50');
+    const buyCount0050 = transactions0050.filter((t: any) => (t.transaction_type.includes('買進') || t.transaction_type.includes('買入')) && !t.transaction_type.includes('融資')).length;
+    const sellCount0050 = transactions0050.filter((t: any) => (t.transaction_type.includes('賣出') || t.transaction_type.includes('賣')) && !t.transaction_type.includes('融資')).length;
+    const totalBuy0050 = transactions0050.filter((t: any) => (t.transaction_type.includes('買進') || t.transaction_type.includes('買入')) && !t.transaction_type.includes('融資')).reduce((sum: number, t: any) => sum + t.quantity, 0);
+    const totalSell0050 = transactions0050.filter((t: any) => (t.transaction_type.includes('賣出') || t.transaction_type.includes('賣')) && !t.transaction_type.includes('融資')).reduce((sum: number, t: any) => sum + t.quantity, 0);
+    console.log(`[0050 交易統計] 總交易數=${transactions0050.length}, 買入筆數=${buyCount0050}, 賣出筆數=${sellCount0050}, 買入總數=${totalBuy0050}, 賣出總數=${totalSell0050}, 理論庫存=${totalBuy0050 - totalSell0050}`);
+    
     transactions.forEach((t: any) => {
       // 判斷交易類型
       let transactionType = '現股'; // 默認
@@ -639,6 +818,18 @@ router.get('/', async (req: AuthRequest, res) => {
       } else if (t.transaction_type.includes('融券')) {
         transactionType = '融券';
       }
+      
+        // 調試：記錄所有 50 股票的交易（特別是 6/24 前後的交易）
+        if (t.stock_code === '0050' || t.stock_code === '50') {
+          const isBuy = t.transaction_type.includes('買進') || t.transaction_type.includes('買入');
+          const isSell = t.transaction_type.includes('賣出') || t.transaction_type.includes('賣');
+          const isCriticalDate = t.trade_date === '2025-06-24' || 
+                                 (t.trade_date && new Date(t.trade_date) >= new Date('2025-06-24'));
+          if (isCriticalDate || t.trade_date === '2025-06-24') {
+            console.log(`[關鍵日期交易] ${t.stock_code} ${t.stock_name}: 交易類型=${t.transaction_type}, transactionType=${transactionType}, isBuy=${isBuy}, isSell=${isSell}, 數量=${t.quantity}, 交易ID=${t.id}, 成交日期=${t.trade_date}, 帳號=${t.account_name} - ${t.broker_name}`);
+          }
+          console.log(`[交易類型判斷] ${t.stock_code} ${t.stock_name}: 交易類型=${t.transaction_type}, transactionType=${transactionType}, isBuy=${isBuy}, isSell=${isSell}, 數量=${t.quantity}, 交易ID=${t.id}, 成交日期=${t.trade_date}, 帳號=${t.account_name} - ${t.broker_name}`);
+        }
 
       // 判斷是國內還是國外
       const isDomestic = (t.currency || 'TWD') === 'TWD';
@@ -692,6 +883,11 @@ router.get('/', async (req: AuthRequest, res) => {
       // 判斷是買入還是賣出
       const isBuy = t.transaction_type.includes('買進') || t.transaction_type.includes('買入');
       const isSell = t.transaction_type.includes('賣出') || t.transaction_type.includes('賣');
+      
+      // 調試：記錄所有 50 股票的交易（簡化條件以確保記錄所有交易）
+      if (t.stock_code === '0050' || t.stock_code === '50') {
+        console.log(`[交易類型判斷] ${t.stock_code} ${t.stock_name}: 交易類型=${t.transaction_type}, transactionType=${transactionType}, isBuy=${isBuy}, isSell=${isSell}, 數量=${t.quantity}, 交易ID=${t.id}, 成交日期=${t.trade_date}, 帳號=${t.account_name} - ${t.broker_name}`);
+      }
 
       if (isBuy) {
         if (transactionType === '現股') {
@@ -701,6 +897,7 @@ router.get('/', async (req: AuthRequest, res) => {
           const feeRate = getDiscountFeeRate(t.etf_type, true); // 使用買入折扣費率
           const fee = t.fee || floorTo2Decimals(priceQty * feeRate);
           
+          const oldQuantity = holding.cashQuantity;
           holding.cashQuantity += t.quantity;
           holding.cashTotalPriceQty += priceQty;
           holding.cashTotalFee += fee;
@@ -713,6 +910,12 @@ router.get('/', async (req: AuthRequest, res) => {
             trade_date: t.trade_date || today,
             originalQuantity: t.quantity,
           });
+          
+          // 調試：記錄買入計算詳情（特別是 50 股票）
+          if (t.stock_code === '0050' || t.stock_code === '50') {
+            const batchTotal = holding.cashBuyBatches.reduce((sum: number, batch: any) => sum + batch.quantity, 0);
+            console.log(`[買入計算] ${t.stock_code} ${t.stock_name}: 買入數量=${t.quantity}, 舊庫存=${oldQuantity}, 新庫存=${holding.cashQuantity}, 批次總數量=${batchTotal}, 交易ID=${t.id}, 成交日期=${t.trade_date}`);
+          }
           
           // 國外股票：記錄買入
           if (!isDomestic) {
@@ -768,9 +971,30 @@ router.get('/', async (req: AuthRequest, res) => {
       } else if (isSell) {
         if (transactionType === '現股') {
           // 現股賣出（使用 FIFO 方法）
-          const sellQty = Math.min(t.quantity, holding.cashQuantity);
-          if (sellQty > 0 && holding.cashQuantity > 0) {
-            let remainingSellQty = sellQty;
+          // 計算可實際賣出的數量（基於批次總數量）
+          const totalBatchQuantity = holding.cashBuyBatches.reduce((sum: number, batch: any) => sum + batch.quantity, 0);
+          // 確保庫存數量與批次總數量一致
+          if (holding.cashQuantity !== totalBatchQuantity) {
+            console.log(`[賣出前庫存不一致] ${t.stock_code} ${t.stock_name}: 庫存數量=${holding.cashQuantity}, 批次總數量=${totalBatchQuantity}, 修正庫存數量`);
+            holding.cashQuantity = totalBatchQuantity;
+          }
+          const actualSellQty = Math.min(t.quantity, totalBatchQuantity);
+          
+          // 調試：記錄賣出前的狀態（特別是 50 股票和 6/24 的交易）
+          if (t.stock_code === '0050' || t.stock_code === '50') {
+            const isCriticalDate = t.trade_date === '2025-06-24';
+            const logLevel = isCriticalDate ? '[關鍵賣出前狀態]' : '[賣出前狀態]';
+            // 保存賣出前的批次詳情（深拷貝）
+            const batchesBeforeSell = JSON.parse(JSON.stringify(holding.cashBuyBatches));
+            console.log(`${logLevel} ${t.stock_code} ${t.stock_name}: 賣出數量=${t.quantity}, 庫存數量=${holding.cashQuantity}, 批次總數量=${totalBatchQuantity}, 批次數量=${holding.cashBuyBatches.length}, 實際可賣=${actualSellQty}, 交易ID=${t.id}, 成交日期=${t.trade_date}`);
+            if (isCriticalDate) {
+              console.log(`  [6/24 賣出前批次詳情] ${JSON.stringify(batchesBeforeSell.map((b: any) => ({ qty: b.quantity, price: b.price, date: b.trade_date })))}`);
+            }
+          }
+          
+          // 只要有批次就可以賣出，即使庫存數量為0也要處理（可能是數據不一致的情況）
+          if (actualSellQty > 0 && holding.cashBuyBatches.length > 0) {
+            let remainingSellQty = actualSellQty;
             
             // 按照買入時間順序（FIFO）扣除批次
             while (remainingSellQty > 0 && holding.cashBuyBatches.length > 0) {
@@ -798,23 +1022,63 @@ router.get('/', async (req: AuthRequest, res) => {
               }
             }
             
-            holding.cashQuantity -= sellQty;
+            // 確保庫存數量與批次總數量一致
+            const newTotalBatchQuantity = holding.cashBuyBatches.reduce((sum: number, batch: any) => sum + batch.quantity, 0);
+            const oldQuantity = holding.cashQuantity;
+            holding.cashQuantity = newTotalBatchQuantity;
             
             // 國外股票：記錄今日賣出
             if (!isDomestic && t.trade_date === today) {
-              holding.foreignTodaySellQuantity += sellQty;
+              holding.foreignTodaySellQuantity += actualSellQty;
+            }
+            
+            // 調試：記錄賣出計算詳情（特別是 50 股票和 6/24 的交易）
+            if (t.stock_code === '0050' || t.stock_code === '50') {
+              const isCriticalDate = t.trade_date === '2025-06-24';
+              const logLevel = isCriticalDate ? '[關鍵賣出計算完成]' : '[賣出計算完成]';
+              console.log(`${logLevel} ${t.stock_code} ${t.stock_name}: 賣出數量=${t.quantity}, 賣出前庫存=${oldQuantity}, 賣出前批次總數量=${totalBatchQuantity}, 實際賣出=${actualSellQty}, 賣出後批次總數量=${newTotalBatchQuantity}, 新庫存=${holding.cashQuantity}, 交易ID=${t.id}, 成交日期=${t.trade_date}`);
+              if (actualSellQty !== t.quantity) {
+                console.log(`  [警告] 實際賣出數量(${actualSellQty}) 不等於 請求賣出數量(${t.quantity})！`);
+              }
+              if (isCriticalDate) {
+                console.log(`  [6/24 賣出後批次詳情] ${JSON.stringify(holding.cashBuyBatches.map((b: any) => ({ qty: b.quantity, price: b.price, date: b.trade_date })))}`);
+              }
+            }
+          } else {
+            // 調試：記錄無法賣出的情況（這是關鍵！如果賣出沒有被扣除，庫存就會多算）
+            if (t.stock_code === '0050' || t.stock_code === '50') {
+              console.log(`[無法賣出 - 警告] ${t.stock_code} ${t.stock_name}: 賣出數量=${t.quantity}, 庫存數量=${holding.cashQuantity}, 批次總數量=${totalBatchQuantity}, 批次數量=${holding.cashBuyBatches.length}, 實際可賣=${actualSellQty}, 交易ID=${t.id}, 成交日期=${t.trade_date}`);
+              console.log(`  [無法賣出原因] actualSellQty=${actualSellQty}, cashBuyBatches.length=${holding.cashBuyBatches.length}`);
+            }
+            // 即使無法賣出，也要確保庫存數量與批次總數量一致
+            const batchTotal = holding.cashBuyBatches.reduce((sum: number, batch: any) => sum + batch.quantity, 0);
+            if (holding.cashQuantity !== batchTotal) {
+              console.log(`[無法賣出但修正庫存] ${t.stock_code} ${t.stock_name}: 庫存數量=${holding.cashQuantity}, 批次總數量=${batchTotal}, 修正庫存數量`);
+              holding.cashQuantity = batchTotal;
             }
           }
         } else if (transactionType === '融資') {
-          // 融資賣出
+          // 融資賣出（不扣除現股庫存）
           const sellQty = Math.min(t.quantity, holding.financingQuantity);
+          
+          // 調試：記錄融資賣出前的狀態（特別是 50 股票）
+          if (t.stock_code === '0050' || t.stock_code === '50') {
+            console.log(`[融資賣出前狀態] ${t.stock_code} ${t.stock_name}: 賣出數量=${t.quantity}, 融資庫存=${holding.financingQuantity}, 現股庫存=${holding.cashQuantity}, 實際可賣=${sellQty}, 交易ID=${t.id}`);
+          }
+          
           if (sellQty > 0) {
             // 按比例減少
             const ratio = sellQty / holding.financingQuantity;
+            const oldFinancingQuantity = holding.financingQuantity;
             holding.financingQuantity -= sellQty;
             holding.financingTotalMargin = floorTo2Decimals(holding.financingTotalMargin * (1 - ratio));
             holding.financingTotalFee = floorTo2Decimals(holding.financingTotalFee * (1 - ratio));
             holding.financingTotalAmount = floorTo2Decimals(holding.financingTotalAmount * (1 - ratio));
+            
+            // 調試：記錄融資賣出計算詳情（特別是 50 股票）
+            if (t.stock_code === '0050' || t.stock_code === '50') {
+              console.log(`[融資賣出計算完成] ${t.stock_code} ${t.stock_name}: 賣出數量=${t.quantity}, 賣出前融資庫存=${oldFinancingQuantity}, 實際賣出=${sellQty}, 新融資庫存=${holding.financingQuantity}, 現股庫存=${holding.cashQuantity}, 交易ID=${t.id}, 成交日期=${t.trade_date}`);
+            }
             
             // 從買入交易記錄中按比例移除
             let remainingQty = sellQty;
@@ -875,6 +1139,20 @@ router.get('/', async (req: AuthRequest, res) => {
       }
     });
 
+    // 獲取手動設置的價格（優先使用手動價格）
+    const manualPriceSettings = await all<any>(
+      `SELECT setting_key, setting_value FROM system_settings 
+       WHERE user_id = ? AND setting_key LIKE 'manual_price_%'`,
+      [req.userId]
+    );
+    const manualPrices = new Map<string, number>();
+    manualPriceSettings.forEach((setting: any) => {
+      const price = parseFloat(setting.setting_value);
+      if (!isNaN(price) && price > 0) {
+        manualPrices.set(setting.setting_key, price);
+      }
+    });
+
     // 批量獲取股票價格（包含價格來源資訊）
     const forceRefresh = refresh === 'true' || refresh === '1';
     if (forceRefresh) {
@@ -886,22 +1164,42 @@ router.get('/', async (req: AuthRequest, res) => {
     let priceUpdateCount = 0;
     holdingsMap.forEach((h: any) => {
       if (h.isDomestic && h.stock_code) {
-        const priceInfo = stockPrices.get(h.stock_code);
-        if (priceInfo && priceInfo.price !== undefined && priceInfo.price !== null && priceInfo.price > 0) {
+        // 先檢查是否有手動設置的價格
+        const manualPriceKey = `manual_price_${h.securities_account_id}_${h.stock_code}_${h.transaction_type || '現股'}`;
+        const manualPrice = manualPrices.get(manualPriceKey);
+        
+        if (manualPrice !== undefined && manualPrice > 0) {
+          // 使用手動設置的價格
           const oldPrice = h.current_price;
-          h.current_price = priceInfo.price;
-          h.price_source = priceInfo.source; // 'realtime' 或 'close'
-          h.price_updated_at = priceInfo.updatedAt; // 時間戳
+          h.current_price = manualPrice;
+          h.price_source = 'manual'; // 標記為手動設置
+          h.price_updated_at = Date.now(); // 時間戳
           priceUpdateCount++;
           
-          // 調試：記錄0050的價格更新
+          // 調試：記錄手動價格更新
           if (h.stock_code === '0050' || h.stock_code.includes('0050')) {
-            console.log(`[價格更新] ${h.stock_code} ${h.stock_name}: 舊價格=${oldPrice}, 新價格=${priceInfo.price}, 來源=${priceInfo.source}`);
+            console.log(`[手動價格] ${h.stock_code} ${h.stock_name}: 舊價格=${oldPrice}, 新價格=${manualPrice}, 來源=manual`);
           }
         } else {
-          // 調試：記錄未獲取到價格的股票
-          if (h.stock_code === '0050' || h.stock_code.includes('0050')) {
-            console.log(`[價格更新失敗] ${h.stock_code} ${h.stock_name}: 未獲取到價格信息`);
+          // 使用 API 獲取的價格
+          const priceInfo = stockPrices.get(h.stock_code);
+          if (priceInfo && priceInfo.price !== undefined && priceInfo.price !== null && priceInfo.price > 0) {
+            const oldPrice = h.current_price;
+            h.current_price = priceInfo.price;
+            // 確保 price_source 被正確設置（'realtime' 或 'close'）
+            h.price_source = priceInfo.source || 'close'; // 如果 source 為空，默認為 'close'
+            h.price_updated_at = priceInfo.updatedAt; // 時間戳
+            priceUpdateCount++;
+            
+            // 調試：記錄價格更新（特別是 3323 和 3402）
+            if (h.stock_code === '3323' || h.stock_code === '3402' || h.stock_code === '0050' || h.stock_code.includes('0050')) {
+              console.log(`[價格更新] ${h.stock_code} ${h.stock_name}: 舊價格=${oldPrice}, 新價格=${priceInfo.price}, 來源=${h.price_source}, priceInfo=${JSON.stringify(priceInfo)}`);
+            }
+          } else {
+            // 調試：記錄未獲取到價格的股票（特別是 3323 和 3402）
+            if (h.stock_code === '3323' || h.stock_code === '3402' || h.stock_code === '0050' || h.stock_code.includes('0050')) {
+              console.log(`[價格更新失敗] ${h.stock_code} ${h.stock_name}: 未獲取到價格信息, priceInfo=${priceInfo ? JSON.stringify(priceInfo) : 'null'}, stockPrices.has(${h.stock_code})=${stockPrices.has(h.stock_code)}`);
+            }
           }
         }
       }
@@ -911,12 +1209,68 @@ router.get('/', async (req: AuthRequest, res) => {
       console.log(`[強制刷新完成] 成功更新 ${priceUpdateCount} 檔股票的價格`);
     }
 
+    // 確保有價格來源的庫存都帶有時間戳，方便前端顯示時間
+    holdingsMap.forEach((h: any) => {
+      if (h.current_price && !h.price_updated_at) {
+        // 若已有價格但缺少時間戳，補上當前時間，方便前端顯示
+        h.price_updated_at = Date.now();
+      }
+    });
+
     // 轉換為陣列並計算相關數值
+    // 首先確保所有庫存數量與批次總數量一致
+    // 調試：檢查 holdingsMap 中有多少條 50 股票的記錄
+    const holdings50 = Array.from(holdingsMap.values()).filter((h: any) => h.stock_code === '0050' || h.stock_code === '50');
+    if (holdings50.length > 0) {
+      console.log(`[調試] holdingsMap 中找到 ${holdings50.length} 條 50 股票的記錄:`);
+      holdings50.forEach((h: any, idx: number) => {
+        const batchTotal = h.cashBuyBatches ? h.cashBuyBatches.reduce((sum: number, batch: any) => sum + batch.quantity, 0) : 0;
+        console.log(`  [${idx}] ${h.stock_code} ${h.stock_name}:`);
+        console.log(`    - key: ${h.securities_account_id}_${h.stock_code}_${h.transaction_type}_${h.isDomestic ? 'TWD' : 'FOREIGN'}`);
+        console.log(`    - cashQuantity: ${h.cashQuantity}`);
+        console.log(`    - batchTotal: ${batchTotal}`);
+        console.log(`    - batchCount: ${h.cashBuyBatches?.length || 0}`);
+        console.log(`    - cashTotalPriceQty: ${h.cashTotalPriceQty}`);
+        console.log(`    - cashTotalFee: ${h.cashTotalFee}`);
+      });
+    }
+    
+    holdingsMap.forEach((h: any) => {
+      if (h.transaction_type === '現股') {
+        const batchTotal = h.cashBuyBatches ? h.cashBuyBatches.reduce((sum: number, batch: any) => sum + batch.quantity, 0) : 0;
+        // 強制同步庫存數量（批次總數量是唯一真實來源）
+        const oldCashQuantity = h.cashQuantity;
+        h.cashQuantity = batchTotal;
+        if (oldCashQuantity !== batchTotal) {
+          console.log(`[庫存不一致修正] ${h.stock_code} ${h.stock_name}: 舊庫存數量=${oldCashQuantity}, 批次總數量=${batchTotal}, 修正為批次總數量`);
+        }
+          // 調試：記錄 50 股票的庫存狀態（特別關注 6/24 之後的批次）
+          if (h.stock_code === '0050' || h.stock_code === '50') {
+            const batchesAfter624 = h.cashBuyBatches?.filter((b: any) => b.trade_date && new Date(b.trade_date) >= new Date('2025-06-24')) || [];
+            const totalAfter624 = batchesAfter624.reduce((sum: number, batch: any) => sum + batch.quantity, 0);
+            console.log(`[過濾前] ${h.stock_code} ${h.stock_name}: 修正後庫存數量=${h.cashQuantity}, 批次總數量=${batchTotal}, 批次數量=${h.cashBuyBatches?.length || 0}`);
+            console.log(`  [6/24 之後批次] 批次數量=${batchesAfter624.length}, 總數量=${totalAfter624}`);
+            console.log(`  [所有批次詳情] ${JSON.stringify(h.cashBuyBatches?.map((b: any) => ({ quantity: b.quantity, price: b.price, date: b.trade_date })) || [])}`);
+          }
+      }
+    });
+    
     const holdings = Array.from(holdingsMap.values())
       .filter((h: any) => {
         // 根據交易類型判斷是否有庫存
         if (h.transaction_type === '現股') {
-          return h.cashQuantity > 0;
+          // 確保庫存數量與批次總數量一致
+          const batchTotal = h.cashBuyBatches ? h.cashBuyBatches.reduce((sum: number, batch: any) => sum + batch.quantity, 0) : 0;
+          // 強制使用批次總數量作為庫存數量
+          h.cashQuantity = batchTotal;
+          
+          // 調試：記錄 50 股票的過濾狀態
+          if (h.stock_code === '0050' || h.stock_code === '50') {
+            console.log(`[過濾檢查] ${h.stock_code} ${h.stock_name}: 修正後cashQuantity=${h.cashQuantity}, 批次總數量=${batchTotal}, 批次數量=${h.cashBuyBatches?.length || 0}, 是否通過過濾=${h.cashQuantity > 0}`);
+          }
+          
+          // 只返回庫存數量大於0的記錄
+          return batchTotal > 0;
         } else if (h.transaction_type === '融資') {
           return h.financingQuantity > 0;
         } else if (h.transaction_type === '融券') {
@@ -935,8 +1289,53 @@ router.get('/', async (req: AuthRequest, res) => {
         if (h.transaction_type === '現股') {
           if (h.isDomestic) {
             // 國內現股
-            quantity = h.cashQuantity;
-            if (quantity > 0) {
+            // 強制使用批次總數量作為庫存數量（唯一真實來源）
+            const batchTotal = h.cashBuyBatches ? h.cashBuyBatches.reduce((sum: number, batch: any) => sum + batch.quantity, 0) : 0;
+            // 強制同步庫存數量
+            h.cashQuantity = batchTotal;
+            quantity = batchTotal;
+            
+            // 調試：記錄 50 股票的庫存狀態（增加更多調試信息）
+            if (h.stock_code === '0050' || h.stock_code === '50') {
+              console.log(`[映射計算開始] ${h.stock_code} ${h.stock_name}:`);
+              console.log(`  - 批次總數量=${batchTotal}`);
+              console.log(`  - 修正前cashQuantity=${h.cashQuantity}`);
+              console.log(`  - 修正後cashQuantity=${batchTotal}`);
+              console.log(`  - quantity=${quantity}`);
+              console.log(`  - 批次數量=${h.cashBuyBatches?.length || 0}`);
+              console.log(`  - 批次詳情=${JSON.stringify(h.cashBuyBatches?.map((b: any) => ({ qty: b.quantity, price: b.price })) || [])}`);
+              console.log(`  - cashTotalPriceQty=${h.cashTotalPriceQty}`);
+              console.log(`  - cashTotalFee=${h.cashTotalFee}`);
+            }
+            
+            // 重要：確保 quantity 始終等於 batchTotal（不要累加！）
+            // 如果批次總數量為0，跳過計算
+            if (batchTotal === 0) {
+              // 調試：記錄 50 股票跳過計算的情況
+              if (h.stock_code === '0050' || h.stock_code === '50') {
+                console.log(`[跳過計算] ${h.stock_code} ${h.stock_name}: 批次總數量=${batchTotal}, quantity=${quantity}, 跳過計算`);
+              }
+              // 返回空值，但保留基本信息
+              quantity = 0;
+              market_value = 0;
+              holding_cost = 0;
+              profit_loss = 0;
+            } else {
+              // 重要：確保 quantity 始終等於 batchTotal（不要累加！）
+              if (quantity !== batchTotal) {
+                // 調試：確保 quantity 正確設置（特別是 50 股票）
+                if (h.stock_code === '0050' || h.stock_code === '50') {
+                  console.log(`[警告] ${h.stock_code} ${h.stock_name}: quantity(${quantity}) !== batchTotal(${batchTotal})，強制修正！`);
+                }
+                quantity = batchTotal;
+              }
+              
+              // 調試：確認 quantity 正確設置（特別是 50 股票）
+              if (h.stock_code === '0050' || h.stock_code === '50') {
+                console.log(`[數量確認] ${h.stock_code} ${h.stock_name}: quantity=${quantity}, batchTotal=${batchTotal}`);
+              }
+              
+              // 計算相關數值（quantity > 0 才執行）
               // 使用重新計算的值，不使用floorTo2Decimals以保持精度
               // 成本均價 = Σ(成交價 × 成交股數 + 手續費) / 股數（點精靈計算方式：包含手續費）
               cost_price = roundTo4Decimals((h.cashTotalPriceQty + h.cashTotalFee) / quantity);
@@ -960,7 +1359,7 @@ router.get('/', async (req: AuthRequest, res) => {
               // - 預估賣出手續費、交易稅：以「整數」無條件捨去（floor）
               const roundedMarketValue = Math.round(floorTo2Decimals(market_value));
               const roundedHoldingCost = Math.round(holding_cost);
-              const estimatedSellFeeInt = Math.floor(roundedMarketValue * stockFeeRate); // 賣出手續費（折扣後，整數捨去）
+              const estimatedSellFeeInt = Math.floor(roundedMarketValue * stockFeeRate); // 賣出手續費（未折扣，整數捨去，與點精靈對齊）
               const estimatedSellTaxInt = Math.floor(roundedMarketValue * stockTaxRate); // 賣出交易稅（整數捨去）
               const totalSellCostInt = estimatedSellFeeInt + estimatedSellTaxInt; // 總賣出成本（整數）
               profit_loss = roundedMarketValue - roundedHoldingCost - totalSellCostInt;
@@ -999,6 +1398,7 @@ router.get('/', async (req: AuthRequest, res) => {
               
               console.log(
                 `[國內現股計算結果] ${h.stock_code} ${h.stock_name} ` +
+                  `數量=${quantity}, ` +
                   `市值(raw)=${market_value}, 市值(整數)=${roundedMarketValue}, ` +
                   `持有成本(raw)=${holding_cost}, 持有成本(整數)=${roundedHoldingCost}, ` +
                   `手續費率=${stockFeeRate}, 交易稅率=${stockTaxRate}, ` +
@@ -1104,6 +1504,19 @@ router.get('/', async (req: AuthRequest, res) => {
           break_even_price = cost_price;
         }
 
+        // 調試：記錄返回前的最終狀態（特別是 50 股票）
+        if (h.stock_code === '0050' || h.stock_code === '50') {
+          const finalBatchTotal = h.transaction_type === '現股' && h.cashBuyBatches 
+            ? h.cashBuyBatches.reduce((sum: number, batch: any) => sum + batch.quantity, 0) 
+            : 0;
+          console.log(`[返回前檢查] ${h.stock_code} ${h.stock_name}:`);
+          console.log(`  - quantity=${quantity}`);
+          console.log(`  - h.cashQuantity=${h.cashQuantity}`);
+          console.log(`  - finalBatchTotal=${finalBatchTotal}`);
+          console.log(`  - market_value=${market_value}`);
+          console.log(`  - holding_cost=${holding_cost}`);
+        }
+        
         return {
           securities_account_id: h.securities_account_id,
           account_name: h.account_name,
@@ -1120,6 +1533,13 @@ router.get('/', async (req: AuthRequest, res) => {
           market_value: market_value,
           holding_cost: holding_cost,
           profit_loss: profit_loss,
+          
+          // 調試：記錄返回的庫存數量（特別是 50 股票）
+          _debug_cashQuantity: h.cashQuantity,
+          _debug_batchTotal: h.transaction_type === '現股' && h.cashBuyBatches 
+            ? h.cashBuyBatches.reduce((sum: number, batch: any) => sum + batch.quantity, 0) 
+            : 0,
+          _debug_financingQuantity: h.financingQuantity || 0,
           profit_loss_percent: profit_loss_percent,
           currency: h.currency,
           // 價格來源資訊
@@ -1142,13 +1562,26 @@ router.get('/', async (req: AuthRequest, res) => {
     console.log(`[總盈虧計算] 總庫存數=${totalHoldings}, 總市值=${totalMarketValue}, 總成本=${totalCost}, 總盈虧=${totalProfitLoss}`);
     console.log(`[總盈虧計算] 各股票盈虧明細:`);
     holdings.forEach((h: any) => {
-      console.log(`  - ${h.stock_code} ${h.stock_name}: 盈虧=${h.profit_loss}, 市值=${h.market_value}, 成本=${h.holding_cost}`);
+      // 使用調試字段而不是嘗試從返回對象中計算（因為返回對象可能不包含 cashBuyBatches）
+      const batchTotal = h._debug_batchTotal || 0;
+      console.log(`  - ${h.stock_code} ${h.stock_name}: 盈虧=${h.profit_loss}, 市值=${h.market_value}, 成本=${h.holding_cost}, 庫存數量=${h.quantity || 0}, 現股庫存=${h._debug_cashQuantity || 0}, 批次總數量=${batchTotal}, 融資庫存=${h._debug_financingQuantity || 0}`);
+      
+      // 調試：如果庫存數量與批次總數量不一致，記錄警告（特別是 50 股票）
+      if ((h.stock_code === '0050' || h.stock_code === '50') && h.quantity !== batchTotal) {
+        console.log(`  [警告] ${h.stock_code} ${h.stock_name}: 庫存數量(${h.quantity})與批次總數量(${batchTotal})不一致！`);
+      }
     });
 
-    // 調試：記錄0050的最終返回數據
-    const holding0050 = holdings.find((h: any) => h.stock_code === '0050');
-    if (holding0050) {
-      console.log(`[Holdings API 返回] 0050 最終數據: 市價=${holding0050.current_price}, 市值=${holding0050.market_value}, 盈虧=${holding0050.profit_loss}`);
+    // 調試：記錄0050的所有最終返回數據（包括 '0050' 和 '50' 兩種格式）
+    const holdings0050 = holdings.filter((h: any) => h.stock_code === '0050' || h.stock_code === '50');
+    if (holdings0050.length > 0) {
+      console.log(`[Holdings API 返回] 找到 ${holdings0050.length} 條 0050 股票的記錄:`);
+      holdings0050.forEach((h: any, idx: number) => {
+        console.log(`  [${idx}] 股票代碼=${h.stock_code}, 股票名稱=${h.stock_name}, 帳號=${h.account_name}, 數量=${h.quantity}, 市值=${h.market_value}, 成本=${h.holding_cost}, 盈虧=${h.profit_loss}`);
+      });
+      // 計算總數量
+      const totalQuantity0050 = holdings0050.reduce((sum: number, h: any) => sum + (h.quantity || 0), 0);
+      console.log(`[Holdings API 返回] 0050 總數量=${totalQuantity0050}, 預期數量=11000`);
     }
 
     res.json({
@@ -1264,10 +1697,14 @@ router.get('/details', async (req: AuthRequest, res) => {
     const buyTransactionRemaining = new Map<number, number>();
     const buyTransactionDetails = new Map<number, any>();
 
-    // 第一次遍歷：記錄所有買入交易，並初始化剩餘數量
+    // 第一次遍歷：記錄所有買入交易（只記錄現股買入），並初始化剩餘數量
     allTransactions.forEach((t: any) => {
       const isBuy = t.transaction_type.includes('買進') || t.transaction_type.includes('買入');
-      if (isBuy) {
+      // 只處理現股買入（排除融資和融券）
+      const isFinancing = t.transaction_type.includes('融資');
+      const isShortSell = t.transaction_type.includes('融券');
+      
+      if (isBuy && !isFinancing && !isShortSell) {
         buyTransactionRemaining.set(t.id, t.quantity);
         buyTransactionDetails.set(t.id, t);
       }
@@ -1284,12 +1721,12 @@ router.get('/details', async (req: AuthRequest, res) => {
       const isBuy = t.transaction_type.includes('買進') || t.transaction_type.includes('買入');
       const isSell = t.transaction_type.includes('賣出') || t.transaction_type.includes('賣');
       
-      if (isBuy || isSell) {
-        let transactionType = '現股';
-        if (t.transaction_type.includes('融資')) transactionType = '融資';
-        else if (t.transaction_type.includes('融券')) transactionType = '融券';
-        
-        const groupKey = `${t.securities_account_id || 'null'}_${t.stock_code}_${transactionType}`;
+      // 只處理現股交易（排除融資和融券）
+      const isFinancing = t.transaction_type.includes('融資');
+      const isShortSell = t.transaction_type.includes('融券');
+      
+      if ((isBuy || isSell) && !isFinancing && !isShortSell) {
+        const groupKey = `${t.securities_account_id || 'null'}_${t.stock_code}_現股`;
         
         if (!stockGroupMap.has(groupKey)) {
           stockGroupMap.set(groupKey, []);
@@ -1344,10 +1781,18 @@ router.get('/details', async (req: AuthRequest, res) => {
       });
     });
 
+    // 調試：記錄庫存明細計算結果
+    console.log(`[庫存明細 API] 找到 ${buyTransactionDetails.size} 筆買入交易`);
+    const remainingCount = Array.from(buyTransactionRemaining.values()).filter((qty: number) => qty > 0).length;
+    console.log(`[庫存明細 API] 剩餘數量 > 0 的買入交易: ${remainingCount} 筆`);
+    
     // 只返回剩餘數量 > 0 的買入交易
     const details = Array.from(buyTransactionDetails.values())
       .filter((t: any) => {
         const remaining = buyTransactionRemaining.get(t.id) || 0;
+        if (remaining > 0) {
+          console.log(`[庫存明細 API] 股票 ${t.stock_code} ${t.stock_name}: 交易ID=${t.id}, 原始數量=${t.quantity}, 剩餘數量=${remaining}`);
+        }
         return remaining > 0;
       })
       .map((t: any) => {
@@ -1449,6 +1894,94 @@ router.get('/details', async (req: AuthRequest, res) => {
     res.status(500).json({
       success: false,
       message: error.message || '獲取庫存明細失敗',
+    });
+  }
+});
+
+// 手動更新股票市價
+router.put('/:securitiesAccountId/:stockCode/price', async (req: AuthRequest, res) => {
+  try {
+    const { securitiesAccountId, stockCode } = req.params;
+    const { price, transactionType } = req.body;
+
+    if (!price || isNaN(parseFloat(price)) || parseFloat(price) <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: '無效的價格',
+      });
+    }
+
+    const transactionTypeValue = transactionType || '現股';
+    const settingKey = `manual_price_${securitiesAccountId}_${stockCode}_${transactionTypeValue}`;
+    const priceValue = parseFloat(price).toFixed(2);
+
+    // 檢查是否已存在該設定
+    const existing = await get<any>(
+      'SELECT id FROM system_settings WHERE user_id = ? AND setting_key = ?',
+      [req.userId, settingKey]
+    );
+
+    if (existing) {
+      // 更新現有設定
+      await run(
+        'UPDATE system_settings SET setting_value = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND setting_key = ?',
+        [priceValue, req.userId, settingKey]
+      );
+    } else {
+      // 創建新設定
+      await run(
+        'INSERT INTO system_settings (user_id, setting_key, setting_value) VALUES (?, ?, ?)',
+        [req.userId, settingKey, priceValue]
+      );
+    }
+
+    // 清除該股票的價格緩存，以便下次獲取時使用新價格
+    priceCache.delete(stockCode);
+
+    res.json({
+      success: true,
+      message: '市價更新成功',
+      data: {
+        securities_account_id: securitiesAccountId,
+        stock_code: stockCode,
+        transaction_type: transactionTypeValue,
+        price: parseFloat(priceValue),
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message || '更新市價失敗',
+    });
+  }
+});
+
+// 清除手動設置的股票市價（恢復自動獲取）
+router.delete('/:securitiesAccountId/:stockCode/price', async (req: AuthRequest, res) => {
+  try {
+    const { securitiesAccountId, stockCode } = req.params;
+    const { transactionType } = req.query;
+
+    const transactionTypeValue = transactionType || '現股';
+    const settingKey = `manual_price_${securitiesAccountId}_${stockCode}_${transactionTypeValue}`;
+
+    // 刪除設定
+    await run(
+      'DELETE FROM system_settings WHERE user_id = ? AND setting_key = ?',
+      [req.userId, settingKey]
+    );
+
+    // 清除該股票的價格緩存
+    priceCache.delete(stockCode);
+
+    res.json({
+      success: true,
+      message: '已清除手動設置的市價，將恢復自動獲取',
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message || '清除市價失敗',
     });
   }
 });

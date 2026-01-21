@@ -14,9 +14,10 @@ router.get('/', async (req: AuthRequest, res) => {
     const db = getDatabase();
     const all = promisify(db.all.bind(db)) as (sql: string, params: any[]) => Promise<any[]>;
 
-    let query = `SELECT s.*, ba.bank_name, ba.account_number, t.stock_code, t.stock_name 
+    let query = `SELECT s.*, ba.bank_name, ba.account_number, sa.account_name as securities_account_name, sa.account_number as securities_account_number, t.stock_code, t.stock_name 
                  FROM settlements s 
                  LEFT JOIN bank_accounts ba ON s.bank_account_id = ba.id 
+                 LEFT JOIN securities_accounts sa ON ba.securities_account_id = sa.id 
                  LEFT JOIN transactions t ON s.transaction_id = t.id 
                  WHERE s.user_id = ?`;
     const params: any[] = [req.userId];
@@ -111,79 +112,7 @@ router.post('/', async (req: AuthRequest, res) => {
       [req.userId, null, transactionIdsJson, bank_account_id, settlement_date, trade_date || null, settlement_amount, twd_amount || null, status, notes || null]
     );
 
-    // 如果狀態為「已交割」，自動產生對應的銀行明細並更新銀行餘額（導入時跳過，因為銀行明細已經存在）
-    if (status === '已交割' && !skipAutoBankTransaction) {
-      const run = promisify(db.run.bind(db)) as (sql: string, params?: any[]) => Promise<void>;
-      const get = promisify(db.get.bind(db)) as (sql: string, params: any[]) => Promise<any>;
-      const all = promisify(db.all.bind(db)) as (sql: string, params: any[]) => Promise<any[]>;
-
-      // 從 transaction_ids 獲取所有交易記錄
-      let transactions: any[] = [];
-      if (transactionIdsJson) {
-        try {
-          const transactionIds = JSON.parse(transactionIdsJson);
-          if (Array.isArray(transactionIds) && transactionIds.length > 0) {
-            const placeholders = transactionIds.map(() => '?').join(',');
-            transactions = await all(
-              `SELECT id, stock_code, stock_name, transaction_type, net_amount FROM transactions 
-               WHERE id IN (${placeholders}) AND user_id = ?`,
-              [...transactionIds, req.userId]
-            );
-          }
-        } catch (e) {
-          console.error('解析 transaction_ids 失敗:', e);
-        }
-      }
-
-      // 如果沒有交易記錄，跳過（不創建銀行明細，因為無法獲取股票名稱）
-      if (transactions.length === 0) {
-        // 不創建銀行明細，因為沒有交易記錄無法獲取股票名稱
-        console.warn(`交割記錄 ${newSettlementId} 沒有關聯的交易記錄，跳過自動創建銀行明細`);
-      } else {
-        // 為每筆交易創建單獨的銀行明細
-        let totalDeposit = 0;
-        let totalWithdrawal = 0;
-
-        for (const transaction of transactions) {
-          const netAmount = transaction.net_amount || 0;
-          const deposit = netAmount < 0 ? Math.abs(netAmount) : 0;
-          const withdrawal = netAmount > 0 ? netAmount : 0;
-          
-          // 生成摘要：只顯示股票名稱
-          const description = transaction.stock_name || '';
-
-          await run(
-            `INSERT INTO bank_transactions (user_id, bank_account_id, transaction_date, description, deposit_amount, withdrawal_amount)
-             VALUES (?, ?, ?, ?, ?, ?)`,
-            [
-              req.userId,
-              bank_account_id,
-              settlement_date,
-              description,
-              deposit,
-              withdrawal,
-            ]
-          );
-
-          totalDeposit += deposit;
-          totalWithdrawal += withdrawal;
-        }
-
-        // 更新銀行帳戶餘額
-        const account: any = await get(
-          'SELECT balance FROM bank_accounts WHERE id = ? AND user_id = ?',
-          [bank_account_id, req.userId]
-        );
-
-        if (account) {
-          const newBalance = (account.balance || 0) + totalDeposit - totalWithdrawal;
-          await run(
-            'UPDATE bank_accounts SET balance = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?',
-            [newBalance, bank_account_id, req.userId]
-          );
-        }
-      }
-    }
+    // 已移除自動創建銀行明細功能
 
     res.status(201).json({
       success: true,
@@ -232,163 +161,7 @@ router.put('/:id', async (req: AuthRequest, res) => {
       [null, transactionIdsJson, bank_account_id, settlement_date, trade_date || null, settlement_amount, twd_amount || null, status, notes || null, id, req.userId]
     );
 
-    // 自動同步銀行明細與餘額
-    // 1. 還原舊的自動銀行明細（如果存在）
-    // 查找所有與此交割記錄相關的銀行明細（可能有多筆）
-    const all = promisify(db.all.bind(db)) as (sql: string, params: any[]) => Promise<any[]>;
-    
-    // 先查找舊的單筆合併明細
-    const autoDescription = `交割自動入帳-${id}`;
-    const existingBankTx: any = await get(
-      'SELECT * FROM bank_transactions WHERE user_id = ? AND bank_account_id = ? AND transaction_date = ? AND description = ?',
-      [req.userId, settlement.bank_account_id, settlement.settlement_date, autoDescription]
-    );
-
-    if (existingBankTx) {
-      // 還原舊帳戶餘額
-      const oldAccount: any = await get(
-        'SELECT balance FROM bank_accounts WHERE id = ? AND user_id = ?',
-        [settlement.bank_account_id, req.userId]
-      );
-      if (oldAccount) {
-        const oldDeposit = existingBankTx.deposit_amount || 0;
-        const oldWithdrawal = existingBankTx.withdrawal_amount || 0;
-        const restoredBalance = (oldAccount.balance || 0) - oldDeposit + oldWithdrawal;
-        await run(
-          'UPDATE bank_accounts SET balance = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?',
-          [restoredBalance, settlement.bank_account_id, req.userId]
-        );
-      }
-
-      // 刪除舊的自動銀行明細
-      await run(
-        'DELETE FROM bank_transactions WHERE id = ? AND user_id = ?',
-        [existingBankTx.id, req.userId]
-      );
-    } else {
-      // 如果沒有找到單筆合併明細，可能是有多筆明細，需要根據 transaction_ids 查找
-      let oldTransactionIds: number[] = [];
-      if (settlement.transaction_ids) {
-        try {
-          oldTransactionIds = JSON.parse(settlement.transaction_ids);
-        } catch (e) {
-          console.error('解析舊 transaction_ids 失敗:', e);
-        }
-      }
-
-      if (oldTransactionIds.length > 0) {
-        // 查找所有相關的銀行明細（通過匹配交易類型和股票代碼）
-        const oldTransactions = await all(
-          `SELECT id, stock_code, stock_name, transaction_type FROM transactions 
-           WHERE id IN (${oldTransactionIds.map(() => '?').join(',')}) AND user_id = ?`,
-          [...oldTransactionIds, req.userId]
-        );
-
-        let totalOldDeposit = 0;
-        let totalOldWithdrawal = 0;
-
-        for (const trans of oldTransactions) {
-          const description = trans.stock_name || '';
-          const relatedBankTx: any = await get(
-            'SELECT * FROM bank_transactions WHERE user_id = ? AND bank_account_id = ? AND transaction_date = ? AND description = ?',
-            [req.userId, settlement.bank_account_id, settlement.settlement_date, description]
-          );
-
-          if (relatedBankTx) {
-            totalOldDeposit += relatedBankTx.deposit_amount || 0;
-            totalOldWithdrawal += relatedBankTx.withdrawal_amount || 0;
-            await run(
-              'DELETE FROM bank_transactions WHERE id = ? AND user_id = ?',
-              [relatedBankTx.id, req.userId]
-            );
-          }
-        }
-
-        // 還原舊帳戶餘額
-        if (totalOldDeposit > 0 || totalOldWithdrawal > 0) {
-          const oldAccount: any = await get(
-            'SELECT balance FROM bank_accounts WHERE id = ? AND user_id = ?',
-            [settlement.bank_account_id, req.userId]
-          );
-          if (oldAccount) {
-            const restoredBalance = (oldAccount.balance || 0) - totalOldDeposit + totalOldWithdrawal;
-            await run(
-              'UPDATE bank_accounts SET balance = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?',
-              [restoredBalance, settlement.bank_account_id, req.userId]
-            );
-          }
-        }
-      }
-    }
-
-    // 2. 若新狀態為「已交割」，建立新的自動銀行明細
-    if (status === '已交割') {
-      // 從 transaction_ids 獲取所有交易記錄
-      let transactions: any[] = [];
-      if (transactionIdsJson) {
-        try {
-          const transactionIds = JSON.parse(transactionIdsJson);
-          if (Array.isArray(transactionIds) && transactionIds.length > 0) {
-            const placeholders = transactionIds.map(() => '?').join(',');
-            transactions = await all(
-              `SELECT id, stock_code, stock_name, transaction_type, net_amount FROM transactions 
-               WHERE id IN (${placeholders}) AND user_id = ?`,
-              [...transactionIds, req.userId]
-            );
-          }
-        } catch (e) {
-          console.error('解析 transaction_ids 失敗:', e);
-        }
-      }
-
-      // 如果沒有交易記錄，跳過（不創建銀行明細，因為無法獲取股票名稱）
-      if (transactions.length === 0) {
-        // 不創建銀行明細，因為沒有交易記錄無法獲取股票名稱
-        console.warn(`交割記錄 ${id} 更新後沒有關聯的交易記錄，跳過自動創建銀行明細`);
-      } else {
-        // 為每筆交易創建單獨的銀行明細
-        let totalDeposit = 0;
-        let totalWithdrawal = 0;
-
-        for (const transaction of transactions) {
-          const netAmount = transaction.net_amount || 0;
-          const deposit = netAmount < 0 ? Math.abs(netAmount) : 0;
-          const withdrawal = netAmount > 0 ? netAmount : 0;
-          
-          // 生成摘要：只顯示股票名稱
-          const description = transaction.stock_name || '';
-
-          await run(
-            `INSERT INTO bank_transactions (user_id, bank_account_id, transaction_date, description, deposit_amount, withdrawal_amount)
-             VALUES (?, ?, ?, ?, ?, ?)`,
-            [
-              req.userId,
-              bank_account_id,
-              settlement_date,
-              description,
-              deposit,
-              withdrawal,
-            ]
-          );
-
-          totalDeposit += deposit;
-          totalWithdrawal += withdrawal;
-        }
-
-        // 更新銀行帳戶餘額
-        const newAccount: any = await get(
-          'SELECT balance FROM bank_accounts WHERE id = ? AND user_id = ?',
-          [bank_account_id, req.userId]
-        );
-        if (newAccount) {
-          const newBalance = (newAccount.balance || 0) + totalDeposit - totalWithdrawal;
-          await run(
-            'UPDATE bank_accounts SET balance = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?',
-            [newBalance, bank_account_id, req.userId]
-          );
-        }
-      }
-    }
+    // 已移除自動創建銀行明細功能
 
     res.json({
       success: true,

@@ -46,7 +46,7 @@ interface Transaction {
   buy_reason?: string;
 }
 
-const TRANSACTION_TYPES = [
+const DEFAULT_TRANSACTION_TYPES = [
   '普通買進',
   '普通賣出',
   '融資買進',
@@ -73,7 +73,7 @@ const Transactions = () => {
     accountId: '',
   });
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(50);
   const [selectedTransactionId, setSelectedTransactionId] = useState<number | null>(null);
   const [sortField, setSortField] = useState<string>('trade_date');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -86,6 +86,9 @@ const Transactions = () => {
   >([]);
   const [stockSearchLoading, setStockSearchLoading] = useState(false);
   const [holdingCostManuallyEdited, setHoldingCostManuallyEdited] = useState(false);
+  const [transactionTypes, setTransactionTypes] = useState<string[]>(DEFAULT_TRANSACTION_TYPES);
+  const [showTypeDropdown, setShowTypeDropdown] = useState(false);
+  const [selectedTransactionIds, setSelectedTransactionIds] = useState<Set<number>>(new Set());
 
   const [formData, setFormData] = useState({
     securities_account_id: '',
@@ -306,15 +309,73 @@ const Transactions = () => {
 
     const transactionAmount = price * quantity;
     const totalAmount = price * quantity + fee;
-    const holdingCost = price * quantity + fee;
-    // 更新成交價金、總金額，持有成本只有在未手動編輯時才自動計算
+    
+    // 更新成交價金、總金額
     setFormData((prev) => ({ 
       ...prev, 
       transaction_amount: transactionAmount || ('' as number | ''),
       total_amount: totalAmount || ('' as number | ''),
-      holding_cost: holdingCostManuallyEdited ? prev.holding_cost : (holdingCost || ('' as number | ''))
     }));
-  }, [formData.price, formData.quantity, formData.fee, formData.transaction_type, formData.stock_code, feeSettings, holdingCostManuallyEdited]);
+  }, [formData.price, formData.quantity, formData.fee, formData.transaction_type, formData.stock_code, feeSettings]);
+
+  // 自動計算客戶淨收付
+  useEffect(() => {
+    const isBuy = formData.transaction_type?.includes('買進') || formData.transaction_type?.includes('買入') || formData.transaction_type?.includes('買');
+    const isSell = formData.transaction_type?.includes('賣出') || formData.transaction_type?.includes('賣');
+    
+    // 如果交易類型不明確，不清除客戶淨收付
+    if (!isBuy && !isSell) {
+      return;
+    }
+
+    const transactionAmount = formData.transaction_amount === '' ? 0 : Number(formData.transaction_amount) || 0;
+    const fee = formData.fee === '' ? 0 : Number(formData.fee) || 0;
+    const tax = formData.tax === '' ? 0 : Number(formData.tax) || 0;
+    const securitiesTax = formData.securities_tax === '' ? 0 : Number(formData.securities_tax) || 0;
+    const financingAmount = formData.financing_amount === '' ? 0 : Number(formData.financing_amount) || 0;
+    const interest = formData.interest === '' ? 0 : Number(formData.interest) || 0;
+
+    let calculatedNetAmount = 0;
+    
+    if (isBuy) {
+      // 買進時的客戶淨收付 = 成交價金 + 手續費 - 融資券擔（加上負號表示支出）
+      calculatedNetAmount = -(transactionAmount + fee - financingAmount);
+    } else if (isSell) {
+      // 賣出時（包括融資賣出）的客戶淨收付 = 成交價金 - 手續費 - 交易稅 - 融資券擔 - 利息（不加負號表示收入）
+      const totalTax = tax + securitiesTax;
+      calculatedNetAmount = transactionAmount - fee - totalTax - financingAmount - interest;
+    }
+    
+    // 更新客戶淨收付（四捨五入到整數）
+    setFormData((prev) => ({ 
+      ...prev, 
+      net_amount: calculatedNetAmount !== 0 ? Math.round(calculatedNetAmount) : ''
+    }));
+  }, [formData.transaction_type, formData.transaction_amount, formData.fee, formData.tax, formData.securities_tax, formData.financing_amount, formData.interest]);
+
+  // 統一計算持有成本：持有成本 = 客戶淨收付 - 損益（買進和賣出都適用）
+  useEffect(() => {
+    const isBuy = formData.transaction_type?.includes('買進') || formData.transaction_type?.includes('買入') || formData.transaction_type?.includes('買');
+    const isSell = formData.transaction_type?.includes('賣出') || formData.transaction_type?.includes('賣');
+    
+    // 只有在買進或賣出、且未手動編輯持有成本時才自動計算
+    if ((!isBuy && !isSell) || holdingCostManuallyEdited) {
+      return;
+    }
+
+    const netAmount = formData.net_amount === '' ? 0 : Number(formData.net_amount) || 0;
+    const profitLoss = formData.profit_loss === '' ? 0 : Number(formData.profit_loss) || 0;
+
+    // 持有成本 = 客戶淨收付 - 損益（適用於買進和賣出，包括融資賣出；取絕對值，不加上負號）
+    const calculatedHoldingCost = netAmount - profitLoss;
+    const absoluteHoldingCost = Math.abs(calculatedHoldingCost);
+    
+    // 更新持有成本（四捨五入到整數，取絕對值）
+    setFormData((prev) => ({ 
+      ...prev, 
+      holding_cost: absoluteHoldingCost > 0 ? Math.round(absoluteHoldingCost) : ''
+    }));
+  }, [formData.transaction_type, formData.net_amount, formData.profit_loss, holdingCostManuallyEdited]);
 
   // 當成交日期改變時，自動更新交割日期（成交日期 + 2 個交易日，T+2，跳過週末和國定假日）
   useEffect(() => {
@@ -464,10 +525,83 @@ const Transactions = () => {
     try {
       await axios.delete(`/api/transactions/${id}`);
       setDeleteConfirm(null);
+      // 如果刪除的記錄在選中列表中，從選中列表中移除
+      setSelectedTransactionIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(id);
+        return newSet;
+      });
       fetchTransactions();
     } catch (err: any) {
       setError(err.response?.data?.message || '刪除失敗');
     }
+  };
+
+  // 批量刪除功能
+  const handleBatchDelete = async () => {
+    if (selectedTransactionIds.size === 0) {
+      alert('請至少選擇一筆要刪除的交易記錄');
+      return;
+    }
+
+    const confirmed = window.confirm(`確定要刪除 ${selectedTransactionIds.size} 筆交易記錄嗎？此操作無法復原。`);
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError('');
+      
+      // 批量刪除
+      const deletePromises = Array.from(selectedTransactionIds).map(id =>
+        axios.delete(`/api/transactions/${id}`).catch(err => {
+          console.error(`刪除記錄 ${id} 失敗:`, err);
+          return { error: err.response?.data?.message || '刪除失敗', id };
+        })
+      );
+
+      const results = await Promise.all(deletePromises);
+      const errors = results.filter(r => r && 'error' in r);
+      
+      if (errors.length > 0) {
+        setError(`刪除完成，但有 ${errors.length} 筆記錄刪除失敗`);
+      } else {
+        setError('');
+        alert(`成功刪除 ${selectedTransactionIds.size} 筆交易記錄`);
+      }
+
+      // 清空選中列表
+      setSelectedTransactionIds(new Set());
+      fetchTransactions();
+    } catch (err: any) {
+      setError(`批量刪除失敗：${err.message || '未知錯誤'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 全選/取消全選
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const allIds = new Set(paginatedTransactions.map(t => t.id));
+      setSelectedTransactionIds(allIds);
+    } else {
+      setSelectedTransactionIds(new Set());
+    }
+  };
+
+  // 單個選擇/取消選擇
+  const handleSelectTransaction = (id: number, checked: boolean) => {
+    setSelectedTransactionIds(prev => {
+      const newSet = new Set(prev);
+      if (checked) {
+        newSet.add(id);
+      } else {
+        newSet.delete(id);
+      }
+      return newSet;
+    });
   };
 
   const resetForm = () => {
@@ -650,6 +784,15 @@ const Transactions = () => {
     currentPage * pageSize
   );
 
+  // 檢查是否全選
+  const isAllSelected =
+    paginatedTransactions.length > 0 &&
+    paginatedTransactions.every((t) => selectedTransactionIds.has(t.id));
+
+  // 檢查是否部分選中
+  const isIndeterminate =
+    paginatedTransactions.some((t) => selectedTransactionIds.has(t.id)) && !isAllSelected;  
+
   // 導出Excel功能
   const exportToExcel = () => {
     // 準備Excel數據
@@ -732,6 +875,28 @@ const Transactions = () => {
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold text-gray-900">交易記錄</h1>
           <div className="flex items-center gap-3">
+            {selectedTransactionIds.size > 0 && (
+              <button
+                onClick={handleBatchDelete}
+                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                  />
+                </svg>
+                刪除已選 ({selectedTransactionIds.size})
+              </button>
+            )}
             <button
               onClick={exportToExcel}
               className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2"
@@ -948,6 +1113,18 @@ const Transactions = () => {
 
                       return (
                         <>
+                          <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 whitespace-nowrap" style={{ minWidth: '50px' }}>
+                            <input
+                              type="checkbox"
+                              checked={isAllSelected}
+                              ref={(input) => {
+                                if (input) input.indeterminate = isIndeterminate;
+                              }}
+                              onChange={(e) => handleSelectAll(e.target.checked)}
+                              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </th>
                           <SortableHeader field="account_name" label="交易帳號" minWidth="120px" />
                           <SortableHeader field="trade_date" label="成交日期" minWidth="90px" />
                           <SortableHeader field="transaction_type" label="種類" minWidth="70px" />
@@ -984,9 +1161,20 @@ const Transactions = () => {
                       className={`cursor-pointer ${
                         selectedTransactionId === transaction.id 
                           ? 'bg-blue-300' 
+                          : selectedTransactionIds.has(transaction.id)
+                          ? 'bg-blue-100'
                           : 'hover:bg-gray-50'
                       }`}
                     >
+                      <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={selectedTransactionIds.has(transaction.id)}
+                          onChange={(e) => handleSelectTransaction(transaction.id, e.target.checked)}
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </td>
                       <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900">
                         {transaction.account_name ? `${transaction.account_name} - ${transaction.broker_name}` : '-'}
                       </td>
@@ -1054,7 +1242,7 @@ const Transactions = () => {
                         {formatPercentage(transaction.return_rate, 2)}
                       </td>
                       <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatNumber(transaction.holding_cost, 2, '$')}
+                        {formatNumber(transaction.holding_cost, 0, '$')}
                       </td>
                       <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900">
                         {transaction.settlement_date ? format(new Date(transaction.settlement_date), 'yyyy/MM/dd') : '-'}
@@ -1065,15 +1253,21 @@ const Transactions = () => {
                       <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900">
                         {transaction.currency || 'TWD'}
                       </td>
-                      <td className="px-2 py-4 whitespace-nowrap text-sm font-medium">
+                      <td className="px-2 py-4 whitespace-nowrap text-sm font-medium" onClick={(e) => e.stopPropagation()}>
                         <button
-                          onClick={() => handleEdit(transaction)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEdit(transaction);
+                          }}
                           className="text-blue-600 hover:text-blue-900 mr-4"
                         >
                           編輯
                         </button>
                         <button
-                          onClick={() => setDeleteConfirm(transaction.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteConfirm(transaction.id);
+                          }}
                           className="text-red-600 hover:text-red-900"
                         >
                           刪除
@@ -1130,6 +1324,7 @@ const Transactions = () => {
                     
                     return (
                       <tr className="bg-gray-100 font-semibold">
+                        <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900"></td>
                         <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900 font-bold" colSpan={5}>小計</td>
                         <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900 text-right font-bold">{formatTotalInt(totals.quantity)}</td>
                         <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900 text-right">-</td>
@@ -1150,7 +1345,7 @@ const Transactions = () => {
                         <td className={`px-2 py-4 whitespace-nowrap text-sm text-right font-bold ${
                           totalReturnRate >= 0 ? 'text-red-600' : 'text-green-600'
                         }`}>{formatTotalNumber(totalReturnRate)}</td>
-                        <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900 text-right font-bold">{formatTotalNumber(totals.holding_cost)}</td>
+                        <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900 text-right font-bold">{formatTotalInt(totals.holding_cost)}</td>
                         <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900">-</td>
                         <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900 text-right font-bold">{formatTotalNumber(totals.health_insurance)}</td>
                         <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900">-</td>
@@ -1171,13 +1366,14 @@ const Transactions = () => {
                   onChange={(e) => {
                     setPageSize(Number(e.target.value));
                     setCurrentPage(1);
+                    setSelectedTransactionIds(new Set()); // 切換頁面大小時清除選中
                   }}
                   className="px-2 py-1 border border-gray-300 rounded-md text-sm"
                 >
-                  <option value={10}>10</option>
-                  <option value={25}>25</option>
                   <option value={50}>50</option>
                   <option value={100}>100</option>
+                  <option value={200}>200</option>
+                  <option value={500}>500</option>
                 </select>
                 <span className="text-sm text-gray-700">
                   共 {transactions.length} 筆，第 {currentPage} / {totalPages} 頁
@@ -1185,7 +1381,10 @@ const Transactions = () => {
               </div>
               <div className="flex space-x-2">
                 <button
-                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                  onClick={() => {
+                    setCurrentPage(Math.max(1, currentPage - 1));
+                    setSelectedTransactionIds(new Set()); // 切換頁面時清除選中
+                  }}
                   disabled={currentPage === 1}
                   className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50"
                 >
@@ -1194,7 +1393,10 @@ const Transactions = () => {
                 {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                   <button
                     key={page}
-                    onClick={() => setCurrentPage(page)}
+                    onClick={() => {
+                      setCurrentPage(page);
+                      setSelectedTransactionIds(new Set()); // 切換頁面時清除選中
+                    }}
                     className={`px-3 py-1 border rounded-md text-sm ${
                       currentPage === page
                         ? 'bg-blue-600 text-white border-blue-600'
@@ -1205,7 +1407,10 @@ const Transactions = () => {
                   </button>
                 ))}
                 <button
-                  onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                  onClick={() => {
+                    setCurrentPage(Math.min(totalPages, currentPage + 1));
+                    setSelectedTransactionIds(new Set()); // 切換頁面時清除選中
+                  }}
                   disabled={currentPage === totalPages}
                   className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50"
                 >
@@ -1338,18 +1543,98 @@ const Transactions = () => {
                   </div>
                   <div className="-ml-1">
                     <label className="block text-sm font-medium text-gray-700 mb-1">種類 *</label>
-                    <select
-                      value={formData.transaction_type}
-                      onChange={(e) => setFormData({ ...formData, transaction_type: e.target.value })}
-                      className="px-3 py-2 border border-gray-300 rounded-md"
-                      style={{ width: 'calc(50% + 2cm)' }}
-                    >
-                      {TRANSACTION_TYPES.map((type) => (
-                        <option key={type} value={type}>
-                          {type}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="relative" style={{ width: 'calc(50% + 2cm)' }}>
+                      <div className="flex gap-1">
+                        <input
+                          type="text"
+                          value={formData.transaction_type}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setFormData({ ...formData, transaction_type: value });
+                            setShowTypeDropdown(true);
+                            // 如果輸入的值不在列表中，且不為空，則新增到列表
+                            if (value && !transactionTypes.includes(value)) {
+                              setTransactionTypes([...transactionTypes, value]);
+                            }
+                          }}
+                          onFocus={() => {
+                            setShowTypeDropdown(true);
+                          }}
+                          onBlur={(e) => {
+                            // 檢查是否點擊在下拉選單區域
+                            const relatedTarget = e.relatedTarget as HTMLElement;
+                            if (!relatedTarget || !e.currentTarget.parentElement?.contains(relatedTarget)) {
+                              setTimeout(() => setShowTypeDropdown(false), 150);
+                            }
+                          }}
+                          className="px-3 py-2 border border-gray-300 rounded-md flex-1"
+                          placeholder="輸入或選擇種類"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const value = formData.transaction_type.trim();
+                            if (value && !transactionTypes.includes(value)) {
+                              setTransactionTypes([...transactionTypes, value]);
+                              setShowTypeDropdown(true);
+                            }
+                          }}
+                          className="px-3 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 text-sm whitespace-nowrap"
+                          title="新增種類"
+                        >
+                          +新增
+                        </button>
+                      </div>
+                      {showTypeDropdown && (
+                        <div 
+                          className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto"
+                          onMouseDown={(e) => {
+                            // 阻止下拉選單區域的 mousedown 事件觸發輸入框的 blur
+                            e.preventDefault();
+                          }}
+                        >
+                          {transactionTypes.map((type) => (
+                            <div
+                              key={type}
+                              className="flex items-center justify-between px-3 py-2 hover:bg-gray-100"
+                            >
+                              <span
+                                className="flex-1 cursor-pointer"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  setFormData({ ...formData, transaction_type: type });
+                                  setShowTypeDropdown(false);
+                                }}
+                              >
+                                {type}
+                              </span>
+                              <button
+                                type="button"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  if (transactionTypes.length > 1) {
+                                    const newTypes = transactionTypes.filter((t) => t !== type);
+                                    setTransactionTypes(newTypes);
+                                    // 如果刪除的是當前選中的種類，則設為第一個選項
+                                    if (formData.transaction_type === type) {
+                                      setFormData({ ...formData, transaction_type: newTypes[0] || '' });
+                                    }
+                                    setShowTypeDropdown(true); // 保持下拉選單打開
+                                  } else {
+                                    alert('至少需要保留一個種類選項');
+                                  }
+                                }}
+                                className="ml-2 text-red-600 hover:text-red-800 text-sm font-bold px-2 py-1 hover:bg-red-50 rounded"
+                                title="刪除此種類"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">代號 *</label>
@@ -1525,10 +1810,26 @@ const Transactions = () => {
                       step="0.01"
                       required
                       value={formData.net_amount === '' ? '' : formData.net_amount}
-                      onChange={(e) => handleNumberChange('net_amount', e.target.value)}
+                      onChange={(e) => {
+                        handleNumberChange('net_amount', e.target.value);
+                        // 如果用戶手動修改客戶淨收付，則不再自動計算（保持當前值）
+                      }}
                       className="px-3 py-2 border border-gray-300 rounded-md"
                       style={{ width: 'calc(50% + 2cm)' }}
                     />
+                    <p className="mt-1 text-xs text-gray-500">
+                      {(() => {
+                        const isBuy = formData.transaction_type?.includes('買進') || formData.transaction_type?.includes('買入') || formData.transaction_type?.includes('買');
+                        const isSell = formData.transaction_type?.includes('賣出') || formData.transaction_type?.includes('賣');
+                        if (isBuy) {
+                          return '自動計算：成交價金 + 手續費 - 融資券擔';
+                        } else if (isSell) {
+                          return '自動計算：成交價金 - 手續費 - 交易稅 - 融資券擔 - 利息';
+                        } else {
+                          return '可手動輸入或自動計算';
+                        }
+                      })()}
+                    </p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">損益</label>
@@ -1557,7 +1858,7 @@ const Transactions = () => {
                     <input
                       type="number"
                       step="0.01"
-                      value={formData.holding_cost === '' ? '' : (typeof formData.holding_cost === 'number' ? formData.holding_cost.toFixed(2) : '')}
+                      value={formData.holding_cost === '' ? '' : (typeof formData.holding_cost === 'number' ? Math.round(formData.holding_cost).toString() : '')}
                       onChange={(e) => {
                         setHoldingCostManuallyEdited(true);
                         handleNumberChange('holding_cost', e.target.value);
@@ -1565,7 +1866,17 @@ const Transactions = () => {
                       className="px-3 py-2 border border-gray-300 rounded-md"
                       style={{ width: 'calc(50% + 2cm)' }}
                     />
-                    <p className="mt-1 text-xs text-gray-500">可手動輸入，或自動計算：數量 × 成交價 + 手續費</p>
+                    <p className="mt-1 text-xs text-gray-500">
+                      {(() => {
+                        const isBuy = formData.transaction_type?.includes('買進') || formData.transaction_type?.includes('買入') || formData.transaction_type?.includes('買');
+                        const isSell = formData.transaction_type?.includes('賣出') || formData.transaction_type?.includes('賣');
+                        if (isBuy || isSell) {
+                          return '自動計算：持有成本 = 客戶淨收付 - 損益';
+                        } else {
+                          return '可手動輸入，或自動計算';
+                        }
+                      })()}
+                    </p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">交割日期</label>

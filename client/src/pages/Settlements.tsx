@@ -28,6 +28,8 @@ interface Transaction {
   borrowing_fee: number;
   net_amount: number;
   currency: string;
+  account_name?: string;
+  broker_name?: string;
 }
 
 interface Settlement {
@@ -37,6 +39,8 @@ interface Settlement {
   bank_account_id: number;
   bank_name?: string;
   account_number?: string;
+  securities_account_name?: string;
+  securities_account_number?: string;
   settlement_date: string;
   trade_date?: string;
   settlement_amount: number;
@@ -64,7 +68,7 @@ const Settlements = () => {
     status: '',
   });
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(50);
   const [selectedSettlementId, setSelectedSettlementId] = useState<number | null>(null);
   const [dragging, setDragging] = useState(false);
   const [modalPosition, setModalPosition] = useState({ x: 0, y: 0 });
@@ -336,7 +340,9 @@ const Settlements = () => {
   const exportToExcel = () => {
     // 準備Excel數據
     const excelData = settlements.map((settlement) => ({
-      '銀行帳戶': settlement.bank_name ? `${settlement.bank_name} - ${settlement.account_number || ''}` : '-',
+      '銀行帳戶': settlement.securities_account_name && settlement.securities_account_number
+        ? `${settlement.securities_account_name} - ${settlement.securities_account_number}`
+        : settlement.bank_name ? `${settlement.bank_name} - ${settlement.account_number || ''}` : '-',
       '交割日期': settlement.settlement_date ? format(new Date(settlement.settlement_date), 'yyyy/MM/dd') : '',
       '成交日期': settlement.trade_date ? format(new Date(settlement.trade_date), 'yyyy/MM/dd') : '',
       '股票代號': settlement.stock_code || '-',
@@ -636,7 +642,11 @@ const Settlements = () => {
                       >
                         {/* 1. 銀行帳戶 */}
                         <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {settlement.bank_name} - {settlement.account_number}
+                          {settlement.securities_account_name && settlement.securities_account_number
+                            ? `${settlement.securities_account_name} - ${settlement.securities_account_number}`
+                            : settlement.bank_name && settlement.account_number
+                            ? `${settlement.bank_name} - ${settlement.account_number}`
+                            : '-'}
                         </td>
                         {/* 2. 交割日期 */}
                         <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -717,6 +727,34 @@ const Settlements = () => {
                       </tr>
                     );
                   })}
+                  
+                  {/* 小計行（本頁） */}
+                  {paginatedSettlements.length > 0 && (() => {
+                    const pageTotals = paginatedSettlements.reduce((acc, settlement) => ({
+                      twd_amount: acc.twd_amount + (settlement.twd_amount || 0),
+                      settlement_amount: acc.settlement_amount + (settlement.settlement_amount || 0),
+                    }), {
+                      twd_amount: 0,
+                      settlement_amount: 0,
+                    });
+                    
+                    return (
+                      <tr className="bg-gray-100 font-semibold">
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900 font-bold" colSpan={2}>小計（本頁共 {paginatedSettlements.length} 筆）</td>
+                        <td className={`px-4 py-4 whitespace-nowrap text-sm font-bold ${
+                          pageTotals.twd_amount >= 0 ? 'text-red-600' : 'text-green-600'
+                        }`}>
+                          {pageTotals.twd_amount !== 0 ? `$${pageTotals.twd_amount.toFixed(2)}` : '-'}
+                        </td>
+                        <td className={`px-4 py-4 whitespace-nowrap text-sm font-bold ${
+                          pageTotals.settlement_amount >= 0 ? 'text-red-600' : 'text-green-600'
+                        }`}>
+                          ${pageTotals.settlement_amount.toFixed(2)}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900" colSpan={5}></td>
+                      </tr>
+                    );
+                  })()}
                 </tbody>
               </table>
             </div>
@@ -733,10 +771,10 @@ const Settlements = () => {
                   }}
                   className="px-2 py-1 border border-gray-300 rounded-md text-sm"
                 >
-                  <option value={10}>10</option>
-                  <option value={25}>25</option>
                   <option value={50}>50</option>
                   <option value={100}>100</option>
+                  <option value={200}>200</option>
+                  <option value={500}>500</option>
                 </select>
                 <span className="text-sm text-gray-700">
                   共 {settlements.length} 筆，第 {currentPage} / {totalPages} 頁
@@ -1023,16 +1061,28 @@ const Settlements = () => {
                               <div className="space-y-2">
                                 <div className="text-xs font-medium text-gray-600 mb-1">可選擇的交易：</div>
                                 {availableTransactions.map((t) => (
-                                  <label key={t.id} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                                  <label key={t.id} className="flex items-start space-x-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
                                     <input
                                       type="checkbox"
                                       checked={false}
                                       onChange={() => handleTransactionToggle(t.id)}
-                                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-0.5"
                                     />
-                                    <span className="text-sm text-gray-700">
-                                      {t.stock_code} {t.stock_name} - {format(new Date(t.trade_date), 'yyyy/MM/dd')}
-                                    </span>
+                                    <div className="flex-1 flex flex-col">
+                                      <span className="text-sm text-gray-700">
+                                        {t.stock_code} {t.stock_name} - {format(new Date(t.trade_date), 'yyyy/MM/dd')}
+                                      </span>
+                                      {t.account_name && (
+                                        <span className="text-xs text-gray-500 mt-0.5">
+                                          交易帳號：{t.account_name} {t.broker_name ? `- ${t.broker_name}` : ''}
+                                        </span>
+                                      )}
+                                      <div className="text-xs text-gray-600 mt-1 flex gap-3">
+                                        <span>數量：{t.quantity}</span>
+                                        <span>成交價：${t.price.toFixed(2)}</span>
+                                        <span>成交金額：${t.transaction_amount.toFixed(2)}</span>
+                                      </div>
+                                    </div>
                                   </label>
                                 ))}
                               </div>

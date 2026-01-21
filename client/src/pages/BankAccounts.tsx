@@ -36,6 +36,7 @@ interface BankTransaction {
   bank_name?: string;
   account_number?: string;
   account_type?: string;
+  securities_account_name?: string;
   transaction_date: string;
   description?: string;
   transaction_category?: string;
@@ -55,7 +56,7 @@ const BankAccounts = () => {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(50);
   
   // 銀行明細相關狀態
   const [bankTransactions, setBankTransactions] = useState<BankTransaction[]>([]);
@@ -63,7 +64,7 @@ const BankAccounts = () => {
   const [editingTransaction, setEditingTransaction] = useState<BankTransaction | null>(null);
   const [deleteTransactionConfirm, setDeleteTransactionConfirm] = useState<number | null>(null);
   const [transactionCurrentPage, setTransactionCurrentPage] = useState(1);
-  const [transactionPageSize, setTransactionPageSize] = useState(10);
+  const [transactionPageSize, setTransactionPageSize] = useState(50);
   const [transactionFilters, setTransactionFilters] = useState({
     bankAccountId: '',
     startDate: '',
@@ -452,7 +453,11 @@ const BankAccounts = () => {
   const exportTransactionsToExcel = () => {
     const excelData = bankTransactions.map((transaction) => ({
       '帳號': transaction.account_number || '-',
-      '帳戶名稱': transaction.bank_name ? `${transaction.bank_name} - ${transaction.account_type || ''}` : '-',
+      '帳戶名稱': transaction.securities_account_name && transaction.account_type
+        ? `${transaction.securities_account_name} - ${transaction.account_type}`
+        : transaction.bank_name && transaction.account_type
+        ? `${transaction.bank_name} - ${transaction.account_type}`
+        : '-',
       '帳務日期': transaction.transaction_date ? format(new Date(transaction.transaction_date), 'yyyy/MM/dd') : '',
       '摘要': transaction.description || '-',
       '選項': transaction.transaction_category || '-',
@@ -548,7 +553,7 @@ const BankAccounts = () => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">證券帳號</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">帳戶類型</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">銀行餘額</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">可用餘額</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">可用餘額(交割)</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">幣別</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">操作</th>
                   </tr>
@@ -579,10 +584,10 @@ const BankAccounts = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         ${account.balance.toFixed(2)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
                         {account.available_balance !== null && account.available_balance !== undefined
-                          ? `$${(account.available_balance || 0).toFixed(2)}` 
-                          : '-'}
+                          ? <span className="text-red-600">${(account.available_balance || 0).toFixed(2)}</span>
+                          : <span className="text-gray-900">-</span>}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {account.currency}
@@ -632,10 +637,10 @@ const BankAccounts = () => {
                   }}
                   className="px-2 py-1 border border-gray-300 rounded-md text-sm"
                 >
-                  <option value={10}>10</option>
-                  <option value={25}>25</option>
                   <option value={50}>50</option>
                   <option value={100}>100</option>
+                  <option value={200}>200</option>
+                  <option value={500}>500</option>
                 </select>
                 <span className="text-sm text-gray-700">
                   共 {accounts.length} 筆，第 {currentPage} / {totalPages} 頁
@@ -802,7 +807,11 @@ const BankAccounts = () => {
                           {transaction.account_number || '-'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {transaction.bank_name ? `${transaction.bank_name} - ${transaction.account_type || ''}` : '-'}
+                          {transaction.securities_account_name && transaction.account_type
+                            ? `${transaction.securities_account_name} - ${transaction.account_type}`
+                            : transaction.bank_name && transaction.account_type
+                            ? `${transaction.bank_name} - ${transaction.account_type}`
+                            : '-'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {transaction.transaction_date ? format(new Date(transaction.transaction_date), 'yyyy/MM/dd') : '-'}
@@ -886,10 +895,10 @@ const BankAccounts = () => {
                     }}
                     className="px-2 py-1 border border-gray-300 rounded-md text-sm"
                   >
-                    <option value={10}>10</option>
-                    <option value={25}>25</option>
                     <option value={50}>50</option>
                     <option value={100}>100</option>
+                    <option value={200}>200</option>
+                    <option value={500}>500</option>
                   </select>
                   <span className="text-sm text-gray-700">
                     共 {bankTransactions.length} 筆，第 {transactionCurrentPage} / {transactionTotalPages} 頁

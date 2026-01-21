@@ -10,27 +10,30 @@ router.use(authenticate);
 router.get('/', async (req: AuthRequest, res) => {
   try {
     const { startDate, endDate, incomeType, stockCode } = req.query;
-    let query = 'SELECT * FROM dividends WHERE user_id = ?';
+    let query = `SELECT d.*, sa.account_name, sa.broker_name 
+                 FROM dividends d 
+                 LEFT JOIN securities_accounts sa ON d.securities_account_id = sa.id 
+                 WHERE d.user_id = ?`;
     const params: any[] = [req.userId];
 
     if (startDate) {
-      query += ' AND record_date >= ?';
+      query += ' AND d.record_date >= ?';
       params.push(startDate);
     }
     if (endDate) {
-      query += ' AND record_date <= ?';
+      query += ' AND d.record_date <= ?';
       params.push(endDate);
     }
     if (incomeType && incomeType !== '全部') {
-      query += ' AND income_type = ?';
+      query += ' AND d.income_type = ?';
       params.push(incomeType);
     }
     if (stockCode) {
-      query += ' AND stock_code LIKE ?';
+      query += ' AND d.stock_code LIKE ?';
       params.push(`%${stockCode}%`);
     }
 
-    query += ' ORDER BY record_date DESC, created_at DESC';
+    query += ' ORDER BY d.record_date DESC, d.created_at DESC';
 
     const dividends = await all<any>(query, params);
 
@@ -104,6 +107,7 @@ router.get('/exrights', async (req: AuthRequest, res) => {
 router.post('/', async (req: AuthRequest, res) => {
   try {
     const {
+      securities_account_id,
       record_date,
       income_type = '全部',
       stock_code,
@@ -125,8 +129,8 @@ router.post('/', async (req: AuthRequest, res) => {
     }
 
     const result = await run(
-      'INSERT INTO dividends (user_id, record_date, income_type, stock_code, stock_name, pre_tax_amount, tax_amount, after_tax_amount, dividend_per_share, share_count, source, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [req.userId, record_date, income_type, stock_code, stock_name, pre_tax_amount, tax_amount, after_tax_amount, dividend_per_share || null, share_count || null, source || null, description || null]
+      'INSERT INTO dividends (user_id, securities_account_id, record_date, income_type, stock_code, stock_name, pre_tax_amount, tax_amount, after_tax_amount, dividend_per_share, share_count, source, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [req.userId, securities_account_id || null, record_date, income_type, stock_code, stock_name, pre_tax_amount, tax_amount, after_tax_amount, dividend_per_share || null, share_count || null, source || null, description || null]
     );
     const newDividendId = result.lastID;
 
@@ -150,6 +154,7 @@ router.put('/:id', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
     const {
+      securities_account_id,
       record_date,
       income_type,
       stock_code,
@@ -176,8 +181,8 @@ router.put('/:id', async (req: AuthRequest, res) => {
     }
 
     await run(
-      'UPDATE dividends SET record_date = ?, income_type = ?, stock_code = ?, stock_name = ?, pre_tax_amount = ?, tax_amount = ?, after_tax_amount = ?, dividend_per_share = ?, share_count = ?, source = ?, description = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?',
-      [record_date, income_type, stock_code, stock_name, pre_tax_amount, tax_amount, after_tax_amount, dividend_per_share || null, share_count || null, source || null, description || null, id, req.userId]
+      'UPDATE dividends SET securities_account_id = ?, record_date = ?, income_type = ?, stock_code = ?, stock_name = ?, pre_tax_amount = ?, tax_amount = ?, after_tax_amount = ?, dividend_per_share = ?, share_count = ?, source = ?, description = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?',
+      [securities_account_id || null, record_date, income_type, stock_code, stock_name, pre_tax_amount, tax_amount, after_tax_amount, dividend_per_share || null, share_count || null, source || null, description || null, id, req.userId]
     );
 
     res.json({

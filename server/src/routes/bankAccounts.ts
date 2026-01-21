@@ -32,17 +32,21 @@ router.get('/', async (req: AuthRequest, res) => {
           [req.userId, account.id]
         );
 
-        // settlement_amount 的符號：
-        // - 正數 = 需要支付（買進未交割）
-        // - 負數 = 會收到（賣出未交割）
-        // 所以：可用餘額 = 現金餘額 - 所有未交割記錄的settlement_amount總和
-        // 因為：正數會減少可用餘額（減），負數會增加可用餘額（減負數等於加）
+        // settlement_amount 的符號與畫面顯示一致：
+        // - 正數：表示金額會增加（例如會收到款項）
+        // - 負數：表示金額會減少（例如要支付款項）
+        // 因此邏輯應該是「直接與銀行餘額相加」：
+        //   可用餘額 ≈ 銀行餘額 + 所有未交割的交割金額（正數加、負數減）
         const totalPendingAmount = pendingSettlements.reduce((sum: number, s: any) => sum + (s.settlement_amount || 0), 0);
 
-        // 可用餘額 ≈ 現金餘額 + 賣出未交割 - 買進未交割 - 委買凍結
-        // 目前系統中沒有委買凍結的概念，暫時設為0
-        const orderFreezeAmount = 0; // 委買凍結（暫時為0）
-        const availableBalance = cashBalance - totalPendingAmount - orderFreezeAmount;
+        // 目前系統中沒有委買凍結的概念，暫時設為 0
+        const orderFreezeAmount = 0; // 委買凍結（暫為 0）
+
+        // 可用餘額 = 現金餘額 + 未交割金額總和 - 委買凍結
+        // 這樣：
+        // - 交割金額為正數時：加上去，可用餘額變大
+        // - 交割金額為負數時：減掉該金額，可用餘額變小
+        const availableBalance = cashBalance + totalPendingAmount - orderFreezeAmount;
 
         return {
           ...account,
